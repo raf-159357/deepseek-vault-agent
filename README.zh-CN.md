@@ -194,6 +194,7 @@ obsidian://vaultagent?vault=<库名>&action=agent&text=<编码后>&auto=1
 npm install
 npm run dev      # 监听构建
 npm run build    # 类型检查 + 打包
+npm run lint     # 官方 eslint-plugin-obsidianmd 规则（提交前必跑）
 npm test         # 三套离线测试：语音链路 / 接口层 / agent 工具与路径
 npm run package  # 生成 dist/deepseek-vault-agent/
 ```

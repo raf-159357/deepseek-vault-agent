@@ -194,6 +194,7 @@ The plugin talks to exactly one host: whatever you put in **Base URL** (default 
 npm install
 npm run dev      # watch
 npm run build    # typecheck + bundle
+npm run lint     # official eslint-plugin-obsidianmd ruleset
 npm test         # 3 offline suites: voice flow, API layer, agent tools/paths
 npm run package  # dist/deepseek-vault-agent/
 ```
