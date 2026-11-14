@@ -242,3 +242,69 @@
 	color: var(--text-faint);
 	line-height: 1.45;
 }
+
+/* AI 指令：执行过程与结果 */
+.dsv-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 180px;
+	overflow-y: auto;
+	margin-top: 2px;
+}
+
+.dsv-step {
+	display: flex;
+	gap: 6px;
+	align-items: flex-start;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+.dsv-step-icon {
+	flex: 0 0 auto;
+	color: var(--interactive-accent);
+	font-weight: 700;
+}
+
+.dsv-step.is-error .dsv-step-icon,
+.dsv-step.is-error .dsv-step-text {
+	color: var(--text-error);
+}
+
+.dsv-step-text {
+	word-break: break-word;
+}
+
+.dsv-reply {
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.6;
+	font-size: 0.92em;
+	background: var(--background-secondary);
+	border-radius: var(--radius-m, 8px);
+	padding: 10px 12px;
+}
+
+.dsv-ops {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 8px);
+	padding: 8px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.dsv-ops-title {
+	font-size: 0.8em;
+	font-weight: 600;
+	color: var(--text-muted);
+	margin-bottom: 2px;
+}
+
+.dsv-op {
+	font-size: 0.84em;
+	line-height: 1.5;
+	word-break: break-word;
+}
