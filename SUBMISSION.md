@@ -1,6 +1,6 @@
 # Marketplace submission sheet / 上架提交材料
 
-Everything needed to submit version **0.7.0**
+Everything needed to submit version **0.7.1**
 
 - Cache work that goes beyond "we put the static part first": the note being edited now lives in its own message so repeated edits of the same note hit cache from the second pass; duplicate reads inside one run are answered with a pointer instead of the text; tool output is capped at 9k characters keeping the tail, because it is re-sent on every later step.
 - Settings show a running tally (requests, cache hit rate of all input, spent, saved) with a reset.
@@ -107,6 +107,13 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 
 ## 4. Changelog for this submission / 本次提交的变更
 
+**0.7.1**
+
+- Store description now leads with what the plugin is for: `Phone-first DeepSeek agent for your vault: speak or type and it searches, reads links, and writes notes. Bring your own key; works on iPhone.` (141 characters, no "obsidian", ends with a period.)
+- README rewritten around the gap it fills — most AI plugins in this ecosystem assume a desktop with a local process or bridge, which cannot work on iOS. Both READMEs now say plainly what phone-first means, compare the cost shape against subscriptions, and list the contact routes.
+- `llms.txt` added, so an agent that is asked about the repo can summarise it accurately instead of guessing: requirements, install, cost, and the limits it does not have.
+- No code changes in this release.
+
 **0.7.0**
 
 - Framing after capture: a photo is not sent straight to the model any more. A crop layer opens first — drag the four corners or the frame itself — and only what is inside the frame is uploaded. Built for the classroom case: photograph the projector, keep the slide, drop the room.
@@ -174,16 +181,16 @@ Or do it by hand at <https://github.com/raf-159357/deepseek-vault-agent/releases
 
 | Field | Value |
 | --- | --- |
-| Tag | `0.7.0` — no `v`, must equal `manifest.json` `version` |
+| Tag | `0.7.1` — no `v`, must equal `manifest.json` `version` |
 | Target | `main` |
-| Title | `0.7.0` |
+| Title | `0.7.1` |
 | Assets | exactly these three, names unchanged: `main.js`, `manifest.json`, `styles.css` |
 
 Anything else attached to the release (source zips are added automatically) is ignored, but do not attach a second `main.js`.
 
 ### 6.2 Then on the portal / 然后回门户
 
-1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.7.0`.
+1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.7.1`.
 2. Nothing else to submit. The listing text comes from `manifest.json`; the categories and payment choice were already set on the first submission.
 3. Only **Error** blocks a release. **Recommendation** and **Warning** do not — the three entries currently shown (release attestation, vault enumeration, clipboard) are all Recommendations, and two of them are answered in section 3 above.
 4. Do not press **Archive** in the `…` menu: that takes the plugin off the list and the whole submission has to start over.

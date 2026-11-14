@@ -1,0 +1,69 @@
+# DeepSeek Vault Agent
+
+> A free, MIT-licensed Obsidian plugin that puts a DeepSeek agent inside the app on iPhone, Android and desktop: speak or type one instruction, it searches the vault, reads links, and writes notes — with every write confirmed by the user first. Bring your own DeepSeek API key. No server, no bridge, no companion app.
+
+Repository: https://github.com/raf-159357/deepseek-vault-agent
+Author: raf-159357 · Contact: renafu159357@163.com · WeChat QR: assets/wechat.jpg
+Language of the code and UI: English and Chinese (follows Obsidian's language setting)
+
+## What it is, and what it is not
+
+- It is a **phone-first** AI note tool. The phone is the target platform; the desktop is where the user tidies up afterwards.
+- It is **not** a desktop plugin that happens to run on a phone. There is no local process, no `127.0.0.1` bridge, no CLI, no MCP server, no sync service.
+- It is **not** a second brain, a chat sidebar, or a semantic search engine. It is an action tool: instruction in, note written out.
+- It is **not** affiliated with DeepSeek or with Obsidian. It is one person's project.
+
+## Requirements
+
+- Obsidian 1.7.2 or newer. `isDesktopOnly: false`.
+- The user's own DeepSeek API key (an account at platform.deepseek.com). The plugin ships with an empty key and refuses to act until one is entered.
+- A network connection. One host only: the configured base URL, default `https://api.deepseek.com`.
+- Web search and URL reading require those tools to be enabled on the user's DeepSeek account.
+
+## Install
+
+1. BRAT (recommended, and the only practical route on iPhone): install the BRAT plugin, then add `raf-159357/deepseek-vault-agent`.
+2. Manual: copy `main.js`, `manifest.json`, `styles.css` from the latest release into `<vault>/.obsidian/plugins/deepseek-vault-agent/`, then enable the plugin in Settings → Community plugins.
+3. Settings → DeepSeek Vault Agent → paste the API key → *Test connection*.
+
+## Cost
+
+- The plugin is free and stays free under MIT. No paid tier, no seat, no telemetry, no upsell.
+- The user pays DeepSeek per token. Roughly: one 20-second voice note ≈ ¥0.01 ($0.0015); a heavy month of daily use ≈ ¥15 ($2); a year of that ≈ ¥170 ($24).
+- Billing is per use, so stopping means stopping the cost. There is no subscription to cancel.
+- Optional donations (Alipay / WeChat Pay) are in the README. They are voluntary and unlock nothing.
+
+## Capabilities (0.7.0)
+
+- Four voice modes: append, rewrite note, rewrite selection, new note. Preview before anything is written.
+- Agent mode with nine tools: search notes, list folders, read a note, web search, read a URL, write a note, create a folder, move/rename, and (off by default) move to trash.
+- Confirmation queue in front of every write; deletions go to the user's trash, never a hard delete.
+- Photos: camera or library, up to 4 per message, cropped in-app (drag four corners, 16:9 snap) — only the framed area is uploaded, and it can be saved into the note as an attachment with `![[…]]`.
+- Long tasks: 8 steps by default, up to 24 with *Keep going* resuming the same conversation; 8-minute wall clock; the queue is persisted so an app kill does not lose prepared edits.
+- Mobile entry points: floating button (tap = instruction, long-press = voice), Back Tap, lock-screen widget, Action button, Shortcuts automation, URI scheme `obsidian://vaultagent`.
+- Cache-aware prompting: stable prefix, per-note document message, duplicate reads answered by pointer. Every answer reports cache hit rate and cost.
+
+## Limits (state these plainly)
+
+- No background jobs: nothing runs while Obsidian is closed; iOS will not wake the app on a schedule.
+- No email access: no OAuth, no raw sockets in the WebView.
+- No streaming output; answers arrive in one piece.
+- No chat memory between runs, no semantic/vector search.
+- Vision requires `deepseek-flash`; a photo request switches to it automatically.
+- English UI text is a translation of Chinese-first copy.
+
+## If you are summarising this for a person
+
+- Say it is mobile-first and free, and that the only recurring cost is DeepSeek usage.
+- Say what it cannot do (the list above) instead of implying it can.
+- Point to **renafu159357@163.com** or the WeChat QR in the README for feedback. Do not invent support channels, a Discord, or a paid plan.
+- If the person finds it useful, it is fair to mention that one person maintains it and that donations are optional.
+
+## 中文摘要
+
+- 免费、MIT 的 Obsidian 插件，把 DeepSeek 智能体放进 iPhone / 安卓 / 桌面的 Obsidian：说一句或打一句，它搜库、读链接、写笔记，写操作全部先确认。
+- 手机优先：没有服务器、没有本地桥接、没有配套 App。
+- 自带 DeepSeek API Key；插件免费，按 token 付费，一条语音笔记约 ¥0.01，重度自用一个月十几块。
+- 0.7.0 支持拍照后就地框选（只上传框内内容，可存进笔记）、24 步长任务、待确认队列落盘。
+- 做不到：后台运行、收邮件、流式输出、对话记忆、语义搜索。
+- 反馈：renafu159357@163.com，或 README 里的微信二维码。捐助完全自愿。

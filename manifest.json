@@ -1,9 +1,9 @@
 {
   "id": "deepseek-vault-agent",
   "name": "DeepSeek Vault Agent",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minAppVersion": "1.7.2",
-  "description": "Speak or type — DeepSeek plans, searches the web, reads links, and writes notes or folders in your vault. Bring your own key; runs on iPhone.",
+  "description": "Phone-first DeepSeek agent for your vault: speak or type and it searches, reads links, and writes notes. Bring your own key; works on iPhone.",
   "author": "raf-159357",
   "authorUrl": "https://github.com/raf-159357",
   "isDesktopOnly": false

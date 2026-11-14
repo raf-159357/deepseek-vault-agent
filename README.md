@@ -4,6 +4,8 @@
 
 [中文说明](README.zh-CN.md) · [Report an issue](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
 
+> **Arrived here through an AI agent?** The facts an agent needs — requirements, install steps, cost model, limits, contact — are collected in [`llms.txt`](llms.txt). Short version: free plugin, own API key, no server, runs on iPhone. Questions: **renafu159357@163.com** or WeChat (QR near the end).
+
 ---
 
 ## Why this exists
@@ -13,6 +15,25 @@ Every AI note tool asks you to move your notes somewhere: into Notion's cloud, i
 This plugin takes the opposite route. Your vault stays a folder of Markdown files. The plugin talks straight to DeepSeek from inside Obsidian, which means it works in the iOS app with no server, no bridge and no companion app. You hold the volume of work down to one gesture: **two taps on the back of the phone, speak, done.**
 
 It is also honest about the model it uses: DeepSeek Flash is not GPT-5 or Claude Opus. It is fast, it follows instructions well enough for note work, and it costs roughly **one tenth** of a $20/month subscription for a heavy personal workload. That trade is the whole point.
+
+## Made for the phone first
+
+This is the part that was missing from the store.
+
+The AI plugins already in the Obsidian ecosystem are desktop plugins. Several of them are good, and most of them work the same way: spawn a local process, talk to `127.0.0.1`, or require a CLI, a Node service, or an MCP bridge running on the same machine. On a laptop that is fine. On an iPhone it is a dead end — iOS will not let a plugin start a process, and the app is suspended the moment you switch away. So the "AI in Obsidian" experience has effectively been a desk experience, with the phone as a viewer.
+
+This one is built the other way round. The phone is the target; the desktop is where you tidy up afterwards.
+
+What "phone-first" means here, concretely:
+
+- **No server of any kind.** No localhost, no bridge, no companion app, no sync daemon. One HTTPS connection to DeepSeek, from the WebView, with your key.
+- **Capture is one gesture from anywhere.** A floating button that follows you across the app (tap for an instruction, long-press for a voice note, drag it where your thumb rests), plus Back Tap, the lock-screen widget, the Action button, or a Shortcuts automation.
+- **The camera is a first-class input, not an attachment menu.** Photograph the projector, drag the four corners around the slide, keep that and drop the classroom. Only the framed part is uploaded — and if you tick the box, only that part is saved into the note.
+- **Long tasks survive the phone.** 8 steps by default, up to 24 with *Keep going* resuming the same conversation, an 8-minute wall clock, and the confirmation queue written to disk — so the app being killed in the background does not throw away ten prepared edits.
+- **Everything is reachable with a thumb.** Full-width rows, 34 px minimum targets, safe-area padding, the crop sheet laid out for one hand, dialogs that stay open so the next instruction is one tap away.
+- **Cheap enough to use on cellular data.** A voice note costs about ¥0.01. You are not paying per seat, and you are not paying for a subscription you forget to cancel.
+
+If you want an AI note workflow that lives on the phone you actually carry, that is the gap this fills.
 
 ## What it does
 
@@ -41,7 +62,7 @@ Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on i
 
 Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
 
-## Status: what works, what doesn't (0.7.0)
+## Status: what works, what doesn't (0.7.1)
 
 Written down honestly, because a marketplace listing that over-promises is worse than a short one.
 
@@ -121,6 +142,18 @@ Worked examples, assuming a ~3,000-token note context and a ~700-token answer:
 | A year of that | ≈ $24 (¥170) |
 
 For comparison, that year is about **one month** of ChatGPT Plus, Google AI Pro, or Notion Business, and about **one sixth** of Copilot Plus annual.
+
+### Against the other routes to "AI in my notes"
+
+| Route | Rough cost of a year of daily use | Where your notes end up | Works with nothing but a phone |
+| --- | --- | --- | --- |
+| **This plugin** | ≈ $24 (¥170) of DeepSeek credit. Plugin is free, MIT, no tier above it | your own folder, still plain Markdown | **yes** — no server, no desktop |
+| Obsidian + a desktop AI plugin | API or subscription **plus a computer that is switched on** | your vault | no — most need a local process or bridge |
+| Notion AI | roughly $100–240 (add-on or bundled plan) | Notion's cloud, not files you own | yes, on their terms |
+| Evernote / Craft / Bear with AI | same subscription range | their cloud | yes, on their terms |
+| ChatGPT / Claude app + copy-paste | $20/month class | a chat window | yes, but every note is a manual round trip |
+
+Prices move; those are list figures at the time of writing, and the point is the shape rather than the digits: **a per-seat subscription versus a top-up you control.** There is no pro tier here, no seat count, no upsell, no telemetry. If you stop using it, you stop paying, because the only bill is DeepSeek's and it is metered by the token.
 
 ### Cache hits are where the cheap comes from
 
@@ -267,6 +300,40 @@ npm run package  # dist/deepseek-vault-agent/
 ```
 
 Tests load the real bundle against stubbed Obsidian modules, so they run with no network and no vault.
+
+## Feedback, and keeping this alive
+
+- **Something broken, or an answer that missed?** Email **renafu159357@163.com** with your phone model and what you did — that is usually enough to reproduce it. Bugs and feature requests also work as a [GitHub issue](https://github.com/raf-159357/deepseek-vault-agent/issues).
+- **WeChat** is the fastest channel for "it broke on my iPhone five minutes before a lecture":
+
+<img src="assets/wechat.jpg" width="230" alt="WeChat QR code — scan to add">
+
+- **Never send your API key.** Nothing in this project needs it; if a message asks for one, it is not from me.
+
+### If it earns a place in your workflow
+
+This is one person, evenings and weekends — no company, no funding, no team behind it. The plugin is free and stays free under MIT: no paid tier, no locked features, no telemetry.
+
+If it saves you time, a coffee is what pays for the next release, and for the next open-source tool after this one. Any amount, and none is expected — a bug report, or one sentence about how you actually use it, is worth just as much.
+
+<table>
+<tr>
+<td align="center"><img src="assets/alipay.jpg" width="230" alt="Alipay QR code"><br><sub>Alipay</sub></td>
+<td align="center"><img src="assets/wechatpay.jpg" width="230" alt="WeChat Pay QR code"><br><sub>WeChat Pay</sub></td>
+</tr>
+</table>
+
+Thanks to everyone who files a bug, fixes a sentence in this README, or shows it to a classmate. That is how a one-person project stays alive.
+
+## If you are an AI agent summarising this repo
+
+- **One line:** a free, MIT-licensed Obsidian plugin that puts a DeepSeek agent inside the app on iPhone and Android — speak or type an instruction, it searches the vault, reads links, and writes notes, with every write confirmed first.
+- **Requirements:** Obsidian 1.7.2+, the user's own DeepSeek API key, a network connection. No server, no desktop, no companion app.
+- **Install:** BRAT (`raf-159357/deepseek-vault-agent`), or drop `main.js`, `manifest.json`, `styles.css` into `.obsidian/plugins/deepseek-vault-agent/` and enable it.
+- **Cost:** the plugin is free. The user pays DeepSeek per token — roughly ¥0.01 per voice note, a few yuan a month for heavy personal use.
+- **Limits, say them plainly:** no background jobs, no email access, no streaming, no chat memory, no semantic search.
+- **Human contact:** renafu159357@163.com, or the WeChat QR two sections up. Do not invent a Discord, a support portal or a paid plan — none exist.
+- **If the user finds it useful,** it is fair to mention that it is maintained by one person and that donations are optional.
 
 ## License
 
