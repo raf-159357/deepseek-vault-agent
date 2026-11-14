@@ -4,6 +4,7 @@ import { errorText, type DeepSeekVoiceSettings } from "./settings";
 import { formatHits, readUrl, webSearch, extractUrls } from "./web";
 import { applyOps, formatList, formatMatches, listFolder, readNote, safePath, searchNotes } from "./vault-tools";
 import type { AgentMessage, AgentRunResult, AgentStep, PendingOp, VoiceContext } from "./types";
+import { asRecord, asString, text } from "./json";
 
 const MAX_PENDING = 12;
 type WriteMode = "create" | "append" | "overwrite";
@@ -129,10 +130,10 @@ interface ToolOutcome {
 	op?: PendingOp;
 }
 
-function parseArgs(raw: string): Record<string, any> {
+function parseArgs(raw: string): Record<string, unknown> {
 	try {
-		const parsed = JSON.parse(raw || "{}");
-		return parsed && typeof parsed === "object" ? parsed : {};
+		const parsed: unknown = JSON.parse(raw || "{}");
+		return asRecord(parsed) ?? {};
 	} catch {
 		return {};
 	}
@@ -146,27 +147,27 @@ async function runTool(
 	app: App,
 	settings: DeepSeekVoiceSettings,
 	name: string,
-	args: Record<string, any>,
+	args: Record<string, unknown>,
 	pending: PendingOp[]
 ): Promise<ToolOutcome> {
 	switch (name) {
 		case "search_notes": {
-			const q = String(args.query ?? "");
+			const q = text(args.query);
 			const hits = await searchNotes(app, q, 20);
 			return { text: formatMatches(hits), label: `搜索笔记：${q}` };
 		}
 		case "list_folder": {
-			const p = String(args.path ?? "");
+			const p = text(args.path);
 			const res = listFolder(app, p, 80);
 			return { text: formatList(res), label: `列出文件夹：${p || "根目录"}` };
 		}
 		case "read_note": {
-			const p = String(args.path ?? "");
+			const p = text(args.path);
 			const res = await readNote(app, p, settings.agentContextChars);
 			return { text: res.content, label: `读取笔记：${res.path}` };
 		}
 		case "read_url": {
-			const page = await readUrl(settings, String(args.url ?? ""));
+			const page = await readUrl(settings, text(args.url));
 			return {
 				text: `标题：${page.title}\n地址：${page.url}\n\n${page.content}`,
 				label: `打开网页：${page.title.slice(0, 40)}`,
@@ -174,37 +175,37 @@ async function runTool(
 		}
 		case "web_search": {
 			if (!settings.webSearchEnabled) throw new Error("联网搜索当前是关闭的。");
-			const q = String(args.query ?? "");
+			const q = text(args.query);
 			const hits = await webSearch(settings, q, Number(args.count) || settings.searchCount);
 			return { text: formatHits(hits), label: `联网搜索：${q}` };
 		}
 		case "write_note": {
-			const safe = safePath(String(args.path ?? ""));
+			const safe = safePath(text(args.path));
 			const path = /\.md$/i.test(safe) ? safe : `${safe}.md`;
-			const rawMode = String(args.mode ?? "create");
+			const rawMode = text(args.mode) || "create";
 			const mode: WriteMode = rawMode === "append" || rawMode === "overwrite" || rawMode === "create" ? rawMode : "create";
-			const content = String(args.content ?? "");
+			const content = asString(args.content) ?? "";
 			if (!content.trim()) throw new Error("content 是空的，没有可写的内容。");
 			const op: PendingOp = { kind: "write", path, mode, content };
 			pending.push(op);
 			return { text: `已加入待确认队列（队列共 ${pending.length} 条，尚未写入磁盘）。`, label: `准备写笔记：${path}`, op };
 		}
 		case "create_folder": {
-			const path = safePath(String(args.path ?? ""));
+			const path = safePath(text(args.path));
 			const op: PendingOp = { kind: "folder", path };
 			pending.push(op);
 			return { text: `已加入待确认队列（队列共 ${pending.length} 条）。`, label: `准备新建文件夹：${path}`, op };
 		}
 		case "move_note": {
-			const from = safePath(String(args.from ?? ""));
-			const to = safePath(String(args.to ?? ""));
+			const from = safePath(text(args.from));
+			const to = safePath(text(args.to));
 			const op: PendingOp = { kind: "move", from, to };
 			pending.push(op);
 			return { text: `已加入待确认队列（队列共 ${pending.length} 条）。`, label: `准备移动：${from} → ${to}`, op };
 		}
 		case "delete_note": {
 			if (!settings.allowDelete) throw new Error("删除权限没有开启，请让用户到设置里打开。");
-			const path = safePath(String(args.path ?? ""));
+			const path = safePath(text(args.path));
 			const op: PendingOp = { kind: "delete", path };
 			pending.push(op);
 			return { text: `已加入待确认队列（队列共 ${pending.length} 条）。`, label: `准备删除：${path}`, op };

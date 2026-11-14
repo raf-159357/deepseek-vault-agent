@@ -34,7 +34,7 @@ export class AgentModal extends Modal {
 	private busy = false;
 
 	private recorder: WavRecorder | null = null;
-	private recTimer: ReturnType<typeof setInterval> | null = null;
+	private recTimer: number | null = null;
 	private transcribing = false;
 	private pending: PendingOp[] = [];
 
@@ -99,7 +99,7 @@ export class AgentModal extends Modal {
 		this.runBtn.addEventListener("click", () => void this.run());
 
 		this.autoGrow();
-		setTimeout(() => {
+		window.setTimeout(() => {
 			if (this.presetText) {
 				this.inputEl.focus();
 				this.inputEl.setSelectionRange(this.presetText.length, this.presetText.length);
@@ -118,8 +118,7 @@ export class AgentModal extends Modal {
 	}
 
 	private autoGrow(): void {
-		this.inputEl.style.height = "auto";
-		this.inputEl.style.height = `${Math.min(this.inputEl.scrollHeight + 2, 220)}px`;
+		this.inputEl.setCssProps({ height: `${Math.min(this.inputEl.scrollHeight + 2, 220)}px` });
 	}
 
 	private setBusy(busy: boolean, label = "执行"): void {
@@ -131,7 +130,7 @@ export class AgentModal extends Modal {
 
 	private startTimer(): void {
 		this.stopTimer();
-		this.recTimer = setInterval(() => {
+		this.recTimer = window.setInterval(() => {
 			const seconds = Math.floor(this.recorder?.elapsedSeconds ?? 0);
 			this.recBtn?.setText(`■ 结束并转写（${seconds}s）`);
 			if (seconds >= MAX_RECORD_SECONDS) void this.finishRecording();
@@ -140,7 +139,7 @@ export class AgentModal extends Modal {
 
 	private stopTimer(): void {
 		if (this.recTimer !== null) {
-			clearInterval(this.recTimer);
+			window.clearInterval(this.recTimer);
 			this.recTimer = null;
 		}
 	}
@@ -256,9 +255,11 @@ export class AgentModal extends Modal {
 		if (!pending.length) {
 			const bar = this.resultEl.createDiv({ cls: "dsv-actions" });
 			const copy = bar.createEl("button", { text: "复制回答" });
-			copy.addEventListener("click", async () => {
-				await navigator.clipboard.writeText(reply);
-				new Notice("已复制");
+			copy.addEventListener("click", () => {
+				void navigator.clipboard
+					.writeText(reply)
+					.then(() => new Notice("已复制"))
+					.catch(() => new Notice("复制失败，请手动选中复制"));
 			});
 			return;
 		}
@@ -273,9 +274,11 @@ export class AgentModal extends Modal {
 		const go = bar.createEl("button", { cls: "mod-cta", text: "执行这些操作" });
 		go.addEventListener("click", () => void this.commit(go));
 		const copy = bar.createEl("button", { text: "复制回答" });
-		copy.addEventListener("click", async () => {
-			await navigator.clipboard.writeText(reply);
-			new Notice("已复制");
+		copy.addEventListener("click", () => {
+			void navigator.clipboard
+				.writeText(reply)
+				.then(() => new Notice("已复制"))
+				.catch(() => new Notice("复制失败，请手动选中复制"));
 		});
 	}
 

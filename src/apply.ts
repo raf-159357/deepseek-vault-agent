@@ -1,6 +1,7 @@
 import { App, MarkdownView, Notice, TFile, TFolder, normalizePath } from "obsidian";
 import type DeepSeekVoicePlugin from "./main";
 import type { VoiceContext, VoiceMode, VoiceResult } from "./types";
+import { asRecord } from "./json";
 
 const VALID_MODES: VoiceMode[] = ["append", "replace-selection", "replace-note", "create-note"];
 
@@ -17,8 +18,8 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 	if (start === -1 || end === -1 || end <= start) return null;
 	const slice = text.slice(start, end + 1);
 	try {
-		const parsed = JSON.parse(slice);
-		return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+		const parsed: unknown = JSON.parse(slice);
+		return asRecord(parsed) ?? null;
 	} catch {
 		return null;
 	}

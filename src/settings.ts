@@ -61,12 +61,10 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl("h2", { text: "DeepSeek Vault Agent" });
-
 		new Setting(containerEl)
 			.setName("DeepSeek API Key")
 			.setDesc(
-				"只存在本库 .obsidian/plugins/deepseek-vault-agent/data.json 里。库若同步到 iCloud / Obsidian Sync，这个 key 也会跟着过去，别把它放进公开库或公开仓库。"
+				`只存在本库 ${this.app.vault.configDir}/plugins/deepseek-vault-agent/data.json 里。库若同步到 iCloud / Obsidian Sync，这个 key 也会跟着过去，别把它放进公开库或公开仓库。`
 			)
 			.addText((text) => {
 				text.inputEl.type = "password";
@@ -144,7 +142,7 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				})
 			);
 
-		containerEl.createEl("h3", { text: "AI 指令（联网与知识库操作）" });
+		new Setting(containerEl).setName("AI 指令（联网与知识库操作）").setHeading();
 
 		new Setting(containerEl)
 			.setName("允许联网搜索")
@@ -165,7 +163,6 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(3, 20, 1)
 					.setValue(this.plugin.settings.searchCount)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.searchCount = value;
 						await this.plugin.saveSettings();
@@ -181,7 +178,6 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(2, 12, 1)
 					.setValue(this.plugin.settings.agentMaxSteps)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.agentMaxSteps = value;
 						await this.plugin.saveSettings();
@@ -270,7 +266,6 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(0, 1, 0.05)
 					.setValue(this.plugin.settings.temperature)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.temperature = value;
 						await this.plugin.saveSettings();
@@ -291,12 +286,12 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			});
 
 		const help = containerEl.createDiv({ cls: "dsv-settings-help" });
-		help.createEl("h3", { text: "手机上怎么一键唤起" });
+		new Setting(help).setName("手机上怎么一键唤起").setHeading();
 		help.createEl("p", {
-			text: "iOS 不向第三方 App 开放音量键，「两个音量键同时按」在 Obsidian 里做不到。可用替代：① 设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下 → 选一个快捷指令；② iPhone 15 Pro 以上的操作按钮绑定快捷指令；③ 锁屏小组件。快捷指令动作只需「打开 URL」，填 obsidian://deepvoice?vault=你的库名&mode=append。",
+			text: "iOS 不向第三方 App 开放音量键，「两个音量键同时按」在 Obsidian 里做不到。可用替代：① 设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下 → 选一个快捷指令；② iPhone 15 Pro 以上的操作按钮绑定快捷指令；③ 锁屏小组件。快捷指令动作只需「打开 URL」，填 obsidian://vaultagent?vault=你的库名&mode=append。",
 		});
 		help.createEl("p", {
-			text: "想连语音识别一起省掉一步：快捷指令里用「听写文本」拿到文字，再拼成 obsidian://deepvoice?vault=库名&mode=append&text=文字&auto=1，插件会直接开始处理。",
+			text: "想连语音识别一起省掉一步：快捷指令里用「听写文本」拿到文字，再拼成 obsidian://vaultagent?vault=库名&mode=append&text=文字&auto=1，插件会直接开始处理。",
 		});
 	}
 }

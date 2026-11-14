@@ -37,10 +37,12 @@ export class WavRecorder {
 			audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
 		});
 
-		const Ctor: typeof AudioContext =
-			(typeof window !== "undefined" && (window.AudioContext || (window as any).webkitAudioContext)) ||
-			(globalThis as any).AudioContext;
-
+		type AudioCtor = new () => AudioContext;
+		const holder = window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor };
+		const Ctor = holder.AudioContext ?? holder.webkitAudioContext;
+		if (!Ctor) {
+			throw new Error("这个环境不支持 Web Audio，无法录音。请改用键盘上的语音输入。");
+		}
 		this.ctx = new Ctor();
 		if (this.ctx.state === "suspended") await this.ctx.resume();
 		this.sampleRate = this.ctx.sampleRate;

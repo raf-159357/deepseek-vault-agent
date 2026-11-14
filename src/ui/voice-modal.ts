@@ -45,7 +45,7 @@ export class VoiceModal extends Modal {
 	private lastInstruction = "";
 
 	private recorder: WavRecorder | null = null;
-	private recTimer: ReturnType<typeof setInterval> | null = null;
+	private recTimer: number | null = null;
 	private transcribing = false;
 
 	constructor(app: App, plugin: DeepSeekVoicePlugin, ctx: VoiceContext, options: VoiceModalOptions = {}) {
@@ -116,7 +116,7 @@ export class VoiceModal extends Modal {
 		this.setMode(this.mode);
 		this.autoGrow();
 
-		setTimeout(() => {
+		window.setTimeout(() => {
 			if (this.presetText) {
 				this.inputEl.focus();
 				this.inputEl.setSelectionRange(this.presetText.length, this.presetText.length);
@@ -135,8 +135,7 @@ export class VoiceModal extends Modal {
 	}
 
 	private autoGrow(): void {
-		this.inputEl.style.height = "auto";
-		this.inputEl.style.height = `${Math.min(this.inputEl.scrollHeight + 2, 260)}px`;
+		this.inputEl.setCssProps({ height: `${Math.min(this.inputEl.scrollHeight + 2, 260)}px` });
 	}
 
 	private canUseMode(mode: VoiceMode): boolean {
@@ -170,7 +169,7 @@ export class VoiceModal extends Modal {
 
 	private startTimer(): void {
 		this.stopTimer();
-		this.recTimer = setInterval(() => {
+		this.recTimer = window.setInterval(() => {
 			const seconds = Math.floor(this.recorder?.elapsedSeconds ?? 0);
 			this.recBtn.setText(`■ 结束并转写（${seconds}s）`);
 			this.recBtn.addClass("is-recording");
@@ -180,7 +179,7 @@ export class VoiceModal extends Modal {
 
 	private stopTimer(): void {
 		if (this.recTimer !== null) {
-			clearInterval(this.recTimer);
+			window.clearInterval(this.recTimer);
 			this.recTimer = null;
 		}
 	}
@@ -318,9 +317,11 @@ export class VoiceModal extends Modal {
 		const writeBtn = bar.createEl("button", { cls: "mod-cta", text: "写入笔记" });
 		writeBtn.addEventListener("click", () => void this.applyResult());
 		const copyBtn = bar.createEl("button", { text: "复制" });
-		copyBtn.addEventListener("click", async () => {
-			await navigator.clipboard.writeText(res.content);
-			new Notice("已复制到剪贴板");
+		copyBtn.addEventListener("click", () => {
+			void navigator.clipboard
+				.writeText(res.content)
+				.then(() => new Notice("已复制到剪贴板"))
+				.catch(() => new Notice("复制失败，请手动选中复制"));
 		});
 		const retryBtn = bar.createEl("button", { text: "重新生成" });
 		retryBtn.addEventListener("click", () => {

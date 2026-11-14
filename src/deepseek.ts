@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import type { AgentMessage, ChatMessage, ToolCall } from "./types";
 import type { DeepSeekVoiceSettings } from "./settings";
+import { asArray, asRecord, asString, get, text } from "./json";
 
 export class ApiError extends Error {
 	status?: number;
@@ -22,10 +23,10 @@ export function joinUrl(baseUrl: string, path: string): string {
 }
 
 export function mapHttpError(status: number, body: string): ApiError {
-	let detail = body;
+	let detail: string = body;
 	try {
-		const parsed = JSON.parse(body);
-		detail = parsed?.error?.message ?? parsed?.message ?? body;
+		const parsed: unknown = JSON.parse(body);
+		detail = text(get(parsed, "error", "message")) || text(get(parsed, "message")) || body;
 	} catch {
 		/* 保持原文 */
 	}
@@ -96,14 +97,14 @@ export async function chatCompletion(
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
 
-	let data: any;
+	let data: unknown;
 	try {
 		data = res.json;
 	} catch {
 		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
 	}
 
-	const content: string | undefined = data?.choices?.[0]?.message?.content;
+	const content = asString(get(data, "choices", 0, "message", "content"));
 	if (!content || !content.trim()) {
 		throw new ApiError("DeepSeek 返回内容为空。换个说法再试一次。");
 	}
@@ -151,10 +152,15 @@ export async function transcribe(settings: DeepSeekVoiceSettings, wav: Uint8Arra
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
 
-	const data = res.json as { text?: string };
-	const text = (data?.text ?? "").trim();
-	if (!text) throw new ApiError("没有识别出内容，可能太短或环境太吵。再说一次试试。");
-	return text;
+	let payload: unknown = undefined;
+	try {
+		payload = res.json;
+	} catch {
+		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
+	}
+	const transcript = text(get(payload, "text"));
+	if (!transcript) throw new ApiError("没有识别出内容，可能太短或环境太吵。再说一次试试。");
+	return transcript;
 }
 
 /** 通用 POST：语音之外的接口（工具调用、联网搜索、读网页）都走这里 */
@@ -162,7 +168,7 @@ export async function postJson(
 	settings: DeepSeekVoiceSettings,
 	path: string,
 	body: Record<string, unknown>
-): Promise<any> {
+): Promise<unknown> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
 		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Vault Agent。");
 	}
@@ -186,11 +192,13 @@ export async function postJson(
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
 
+	let payload: unknown;
 	try {
-		return res.json;
+		payload = res.json;
 	} catch {
 		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
 	}
+	return payload;
 }
 
 export interface ToolsReply {
@@ -221,18 +229,20 @@ export async function chatWithTools(
 	if (!settings.thinking) body.temperature = settings.temperature;
 
 	const data = await postJson(settings, "/chat/completions", body);
-	const message = data?.choices?.[0]?.message;
-	if (!message) throw new ApiError("DeepSeek 没有返回 message，可能是接口地址不对。");
+	const message = get(data, "choices", 0, "message");
+	if (!asRecord(message)) throw new ApiError("DeepSeek 没有返回 message，可能是接口地址不对。");
 
-	const rawCalls: unknown[] = Array.isArray(message.tool_calls) ? message.tool_calls : [];
-	const toolCalls: ToolCall[] = rawCalls.map((c: any, i: number) => ({
-		id: typeof c?.id === "string" && c.id ? c.id : `call_${i}`,
-		type: "function" as const,
-		function: {
-			name: String(c?.function?.name ?? ""),
-			arguments: typeof c?.function?.arguments === "string" ? c.function.arguments : "{}",
-		},
-	})).filter((c) => c.function.name);
+	const rawCalls = asArray(get(message, "tool_calls"));
+	const toolCalls: ToolCall[] = rawCalls
+		.map((c, i) => ({
+			id: text(get(c, "id")) || `call_${i}`,
+			type: "function" as const,
+			function: {
+				name: text(get(c, "function", "name")),
+				arguments: text(get(c, "function", "arguments")) || "{}",
+			},
+		}))
+		.filter((c) => c.function.name);
 
-	return { content: typeof message.content === "string" ? message.content : "", toolCalls };
+	return { content: asString(get(message, "content")) ?? "", toolCalls };
 }

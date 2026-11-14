@@ -1,5 +1,6 @@
 import { ApiError, postJson } from "./deepseek";
 import type { DeepSeekVoiceSettings } from "./settings";
+import { asArray, asString, get, text } from "./json";
 
 export interface SearchHit {
 	title: string;
@@ -32,14 +33,14 @@ export async function webSearch(
 		need_content: false,
 	});
 
-	const list: unknown[] = Array.isArray(data?.results) ? data.results : [];
+	const list = asArray(get(data, "results"));
 	return list
-		.map((r: any) => ({
-			title: String(r?.title ?? "").trim(),
-			url: String(r?.url ?? "").trim(),
-			summary: String(r?.summary ?? r?.snippet ?? "").trim(),
-			date: typeof r?.date === "string" ? r.date : undefined,
-			site: typeof r?.site_name === "string" && r.site_name ? r.site_name : undefined,
+		.map((r) => ({
+			title: text(get(r, "title")),
+			url: text(get(r, "url")),
+			summary: text(get(r, "summary")) || text(get(r, "snippet")),
+			date: asString(get(r, "date")),
+			site: text(get(r, "site_name")) || undefined,
 		}))
 		.filter((r) => r.url && r.title);
 }
@@ -72,12 +73,12 @@ export async function readUrl(settings: DeepSeekVoiceSettings, url: string): Pro
 	if (!/^https?:\/\//i.test(u)) throw new ApiError(`不是有效的网页地址：${u}`);
 
 	const data = await postJson(settings, "/v1/tools/fetch", { url: u });
-	const content = String(data?.content ?? "");
+	const content = text(get(data, "content"));
 	if (!content.trim()) {
 		throw new ApiError("这个网页抓不到正文，可能是需要登录、纯图片，或者被站点拦了。");
 	}
 	return {
-		title: String(data?.title ?? "").trim() || u,
+		title: text(get(data, "title")) || u,
 		url: u,
 		content: content.length > MAX_PAGE_CHARS ? `${content.slice(0, MAX_PAGE_CHARS)}\n\n（正文过长，已截断）` : content,
 	};

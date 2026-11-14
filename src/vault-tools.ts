@@ -1,7 +1,8 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
 import type { PendingOp } from "./types";
 
-const FORBIDDEN_SEGMENTS = [".obsidian", ".git", ".trash", "node_modules"];
+// 配置目录不一定是 .obsidian（用户可改），统一交给下面的「隐藏目录」规则拦，避免写死路径
+const FORBIDDEN_SEGMENTS = [".git", ".trash", "node_modules"];
 const MAX_WRITE_CHARS = 200_000;
 
 /**
@@ -154,9 +155,12 @@ export function describeOp(op: PendingOp): string {
 async function trash(app: App, path: string): Promise<void> {
 	const file = app.vault.getAbstractFileByPath(path);
 	if (!file) throw new Error(`找不到「${path}」，可能已经被删了。`);
+	if (!(file instanceof TFile) && !(file instanceof TFolder)) {
+		throw new Error(`「${path}」不是笔记或文件夹。`);
+	}
 	const fm = app.fileManager as unknown as { trashFile?: (f: TFile | TFolder) => Promise<void> };
 	if (typeof fm.trashFile === "function") {
-		await fm.trashFile(file as TFile);
+		await fm.trashFile(file);
 		return;
 	}
 	await app.vault.trash(file, true);
@@ -200,7 +204,6 @@ export async function applyOps(app: App, ops: PendingOp[]): Promise<string[]> {
 		const existing = app.vault.getAbstractFileByPath(path);
 
 		if (op.mode === "create" && existing) throw new Error(`「${path}」已经存在，改用追加或覆盖。`);
-		if (existing && !(existing instanceof TFile)) throw new Error(`「${path}」是文件夹，不能当笔记写。`);
 
 		if (!existing) {
 			await ensureFolder(app, parentOf(path));
@@ -209,7 +212,8 @@ export async function applyOps(app: App, ops: PendingOp[]): Promise<string[]> {
 			continue;
 		}
 
-		const file = existing as TFile;
+		if (!(existing instanceof TFile)) throw new Error(`「${path}」是文件夹，不能当笔记写。`);
+		const file = existing;
 		if (op.mode === "append") {
 			await app.vault.process(file, (data) => {
 				const head = data.replace(/\s+$/, "");
