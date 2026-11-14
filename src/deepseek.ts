@@ -61,7 +61,7 @@ export async function chatCompletion(
 	opts: ChatOptions = {}
 ): Promise<string> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
-		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Voice Notes。");
+		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Vault Agent。");
 	}
 
 	const body: Record<string, unknown> = {
@@ -164,7 +164,7 @@ export async function postJson(
 	body: Record<string, unknown>
 ): Promise<any> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
-		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Voice Notes。");
+		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Vault Agent。");
 	}
 
 	let res;

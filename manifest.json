@@ -1,9 +1,9 @@
 {
-	"id": "deepseek-voice-notes",
-	"name": "DeepSeek Voice Notes",
-	"version": "0.2.0",
+	"id": "deepseek-vault-agent",
+	"name": "DeepSeek Vault Agent",
+	"version": "0.3.0",
 	"minAppVersion": "1.5.0",
-	"description": "Voice or typed instructions — DeepSeek searches the web, reads links, and edits your vault. Bring your own API key.",
+	"description": "Speak or type — DeepSeek plans, searches the web, reads links, and writes notes or folders in your vault. Bring your own key; runs on iPhone.",
 	"author": "raf-159357",
 	"authorUrl": "https://github.com/raf-159357",
 	"isDesktopOnly": false

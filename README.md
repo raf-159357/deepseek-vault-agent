@@ -1,235 +1,205 @@
-# DeepSeek Voice Notes
+# DeepSeek Vault Agent
 
-**Speak one sentence. It lands in your vault as a proper note.**
+**Say one sentence — it searches the web, reads the links, and writes the note.** A voice-first AI agent for Obsidian that runs on your own DeepSeek API key, on desktop **and on iPhone**.
 
-An Obsidian plugin that turns spoken or typed instructions into real work — it can search the web, open the links you send it, read your vault, and write notes back. Bring your own DeepSeek API key.
-
-[中文说明](README.zh-CN.md) · [Report an issue](https://github.com/raf-159357/obsidian-deepseek-voice/issues)
+[中文说明](README.zh-CN.md) · [Report an issue](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
 
 ---
 
 ## Why this exists
 
-Obsidian is excellent at storing thoughts and terrible at capturing them in a hurry. When you are walking, cooking, or lying in bed, you are not going to open a note, find the right place, and type.
+Every AI note tool asks you to move your notes somewhere: into Notion's cloud, into a chat window where you paste text back and forth, or onto a desktop-only setup that needs a local CLI, a Node process, or an MCP bridge running in the background.
 
-This plugin closes that gap with one loop:
+This plugin takes the opposite route. Your vault stays a folder of Markdown files. The plugin talks straight to DeepSeek from inside Obsidian, which means it works in the iOS app with no server, no bridge and no companion app. You hold the volume of work down to one gesture: **two taps on the back of the phone, speak, done.**
 
-> speak → DeepSeek transcribes and rewrites → you approve → the note is updated
+It is also honest about the model it uses: DeepSeek Flash is not GPT-5 or Claude Opus. It is fast, it follows instructions well enough for note work, and it costs roughly **one tenth** of a $20/month subscription for a heavy personal workload. That trade is the whole point.
 
-Nothing is written until you press **Write**. Every step is visible.
+## What it does
 
-## What it actually does
+**Voice → note, four ways**
 
-You say something like:
+| Mode | What happens |
+| --- | --- |
+| Append | Your speech is cleaned up and appended to the current note |
+| Rewrite note | The note is reorganised; frontmatter is preserved, body replaced |
+| Rewrite selection | Only the highlighted paragraph is touched |
+| New note | A title, a folder (if needed) and a file are created for you |
 
-> “Note down today's group meeting. Professor Wang wants three more experiments, draft due next Wednesday, and I should check the 2023 cohort data first.”
+**Instructions → actions, with web access**
 
-Pick a target, press generate, and you get a structured block — not a raw transcript:
+Type or dictate an instruction in plain language:
 
-```markdown
-### 2026-11-14 组会
+- *"Search the latest on GLP-1 and atrial fibrillation, then write a 5-point summary into 文献/综述.md"*
+- *"Read the three links in this note and turn them into a comparison table"*
+- *"Create a folder 课题/开题 and draft an outline there"*
 
-- 王老师要求补充三组实验
-- 下周三之前交初稿
-- 优先核对 2023 级队列数据
-```
+The agent has nine tools: search notes, list folders, read a note, web search, read a URL, write a note, create a folder, move/rename, and (off by default) move to trash.
 
-Four targets, each useful in a different situation:
+## How it compares
 
-| Mode | What happens | When to use it |
-| --- | --- | --- |
-| **Append** | Adds the result to the end of the current note | Daily log, meeting notes, running list |
-| **Rewrite note** | Replaces the body, keeps frontmatter | Cleaning up a messy draft |
-| **Rewrite selection** | Replaces only the selected text | Fixing one paragraph |
-| **New note** | Creates a file with a generated title | Idea capture, quick memos |
+Prices as listed by each vendor in November 2026, for one person. This table is about *fit*, not about which model is smartest.
 
-## Agent mode: it goes online and works inside your vault
+| | Where your notes live | Can it change your vault? | Works on iPhone? | What you pay |
+| --- | --- | --- | --- | --- |
+| **Obsidian alone** | Your disk / your sync | — | Yes | $0 |
+| **ChatGPT / Gemini / Claude in a browser** | Their cloud, your clipboard | No — you copy and paste | Yes, as a browser tab | $20, $19.99, $20 / month |
+| **Notion AI** | Notion's cloud | Yes, inside Notion only | Yes | $20 / member / month (Business; AI included) |
+| **Copilot for Obsidian** | Your vault | Yes, with BYO key on the free tier | Manifest allows it; the agent features lean on local CLIs | Free BYOK, Plus $14.99/mo |
+| **Vault Operator / DSH-type agent plugins** | Your vault | Yes | Desktop only (`isDesktopOnly: true`) | Free, plus your own model key |
+| **DeepSeek Vault Agent** | Your vault, plain Markdown | Yes, with a confirmation queue | Yes, voice-first | **DeepSeek usage only, ≈ $2/month heavy use** |
 
-Voice input only rewrites text. **AI instruction** goes further: you describe an outcome, the model decides what to look up and what to write.
+### What is genuinely different
 
-```
-Ctrl/Cmd + P → “AI instruction: search the web / organise notes”
-```
+Let's not pretend this is the first agent plugin. The community list already has 260+ plugins mentioning agents, and several of them write to your vault properly. Three things are still rare in combination:
 
-Say or type, for example:
+1. **iPhone is a first-class target.** Most vault-agent plugins are desktop-only because they wrap Claude Code, Codex or a local DSH process. This one is pure HTTP from inside Obsidian, so the phone is not an afterthought.
+2. **One API key, both jobs.** The same DeepSeek key does speech-to-text, reasoning, web search and page fetching. No second provider, no search subscription.
+3. **Nothing is written until you say so.** Read tools run immediately; every write goes into a queue you approve. That is deliberately more conservative than "let the agent edit freely".
 
-> “Read the three links in this note, compare them, and create a note under 文献/综述 with the differences.”
+### Where it is weaker
 
-The model then works in steps: it reads the note, fetches each page, and prepares one new file.
+- The model is cheaper, and it shows on long, subtle rewrites. Switch to `deepseek-v4-pro` in settings for those.
+- The interface is Chinese-first today. English UI strings are on the roadmap.
+- No embeddings, no semantic search, no chat sidebar with memory. It is an action tool, not a second brain.
 
-### What it can do
+## What it actually costs
 
-| Tool | Reads or writes | Notes |
-| --- | --- | --- |
-| `web_search` | reads | DeepSeek `/v1/tools/search`, 3–20 results with summaries |
-| `read_url` | reads | DeepSeek `/v1/tools/fetch`, returns the page as Markdown |
-| `search_notes` | reads | Title first, then full text, in your vault |
-| `list_folder` | reads | Root or any subfolder |
-| `read_note` | reads | Capped by the “characters per note” setting |
-| `write_note` | **queued** | `create` / `append` / `overwrite`, folders auto-created |
-| `create_folder` | **queued** | For structuring a topic |
-| `move_note` | **queued** | Move or rename |
-| `delete_note` | **queued**, off by default | Moves to trash, never permanent |
+Real DeepSeek list prices (November 2026, **off-peak**; peak hours are 2×):
 
-### The safety model
+| Item | Price |
+| --- | --- |
+| Input, cache miss | $0.15 / 1M tokens |
+| Output | $0.60 / 1M tokens |
+| Web search | $0.75 / 1,000 searches |
+| Web fetch | $0.75 / 1,000 fetches |
+| Speech to text | $0.116 / hour of audio |
 
-Read operations run immediately. **Write operations are never executed during the conversation** — they land in a confirmation queue, and you see a list like:
+Worked examples, assuming a ~3,000-token note context and a ~700-token answer:
 
-```
-· 新建「文献/综述/三篇对比.md」（1,842 字）
-· 新建文件夹「文献/综述」
-```
+| Task | Cost |
+| --- | --- |
+| One 20-second voice note (transcribe + rewrite) | ≈ $0.0015 (¥0.01) |
+| 1,000 voice notes | ≈ $1.50 (¥11) |
+| One research run (1 search + 2 page reads + 3 model turns) | ≈ $0.007 (¥0.05) |
+| Heavy month: 20 notes/day + 5 research runs/day | ≈ $2 (¥15) |
+| A year of that | ≈ $24 (¥170) |
 
-Only **Execute these operations** touches the disk. Cancel, and the vault is untouched.
+For comparison, that year is about **one month** of ChatGPT Plus, Google AI Pro, or Notion Business, and about **one sixth** of Copilot Plus annual.
 
-On top of that:
-
-- Paths are validated: no `..`, no absolute paths, no `.obsidian`, `.git`, or hidden folders.
-- Writes are capped at 200,000 characters per operation and 12 queued operations per run.
-- Steps per instruction are capped (6 by default, max 12) so a confused model cannot loop forever.
-- Deletion is opt-in, goes to the trash, and still requires your click.
-
-### Two things it will not do
-
-- **Run on a schedule.** Obsidian plugins only exist while the app is open; iOS does not let them run in the background. “Every morning at 8” has to be a Shortcut, not the plugin.
-- **Read your mailbox.** Gmail/IMAP needs OAuth and raw sockets, neither of which a WebView plugin has. Forward the mail into a note (or an email→RSS bridge) and point the agent at that note instead.
+Caveats, because they matter: those numbers assume Flash and off-peak. Long documents, `deepseek-v4-pro`, or letting the agent read ten pages per request will multiply them. There is no free tier — you top up DeepSeek and pay per use, which is exactly why there is no subscription here.
 
 ## Install
 
-### BRAT (recommended — the only practical route on iPhone/iPad)
+### BRAT (recommended, and the only practical route on iPhone)
 
-1. Install **BRAT** from Community plugins
-2. Open BRAT → **Add Beta plugin**
-3. Enter `raf-159357/obsidian-deepseek-voice`
-4. Enable **DeepSeek Voice Notes** in Community plugins
+1. Install **BRAT** from Community plugins.
+2. BRAT → **Add Beta plugin** → `raf-159357/deepseek-vault-agent`.
+3. Enable **DeepSeek Vault Agent** in Community plugins.
 
-### Manual (desktop)
+### Manual
 
-Download `manifest.json`, `main.js`, and `styles.css` from the [latest release](https://github.com/raf-159357/obsidian-deepseek-voice/releases/latest) and place them in:
+Download `manifest.json`, `main.js`, `styles.css` from the [latest release](https://github.com/raf-159357/deepseek-vault-agent/releases/latest) and place them in:
 
 ```
-<vault>/.obsidian/plugins/deepseek-voice-notes/
+<vault>/.obsidian/plugins/deepseek-vault-agent/
 ```
 
-Reload Obsidian, then enable the plugin.
-
-> On iOS the `.obsidian` folder is hidden by the Files app, so manual installation is not possible there. Use BRAT.
+Then reload Obsidian and enable the plugin. On iOS the `.obsidian` folder is hidden from the Files app, so use BRAT there.
 
 ## Setup
 
-You need a DeepSeek API key — **the plugin ships with none, and never will**.
+1. Get a key at [platform.deepseek.com](https://platform.deepseek.com) → API keys, and add a small balance.
+2. Obsidian → Settings → Community plugins → **DeepSeek Vault Agent** → gear icon → paste the key → **Test connection**.
 
-1. Sign up at [platform.deepseek.com](https://platform.deepseek.com)
-2. Create an API key under **API keys**
-3. Top up a small balance (voice notes cost very little at the `deepseek-flash` tier)
-4. In Obsidian: Settings → Community plugins → DeepSeek Voice Notes → gear icon → paste the key → **Test connection**
+Defaults are already correct: `https://api.deepseek.com`, model `deepseek-flash`, thinking off (faster and cheaper). If you use a proxy or a reseller, change the base URL — a trailing `/v1` is handled either way.
 
-## Using it
+## Using it on the phone
 
-### Desktop
+The iOS volume buttons are not available to third-party apps, so pick one of these:
 
-`Ctrl/Cmd + P` → type **voice** → pick one of the four commands.
-
-### iPhone / iPad
-
-iOS does not expose hardware volume buttons to third-party apps, so “hold both volume keys” is not possible. Use one of these instead:
-
-**Back Tap** — Settings → Accessibility → Touch → Back Tap → Double Tap → pick a shortcut containing a single **Open URL** action:
+**Back Tap** — Settings → Accessibility → Touch → Back Tap → Double Tap → your shortcut. The shortcut needs exactly one action, **Open URL**:
 
 ```
-obsidian://deepvoice?mode=append
+obsidian://vaultagent?mode=append
 ```
 
-**Home / Lock Screen widget** — add a Shortcuts widget pointing at the same shortcut. One tap opens the voice panel.
+(The old `obsidian://deepvoice?...` link still works and will keep working — shortcuts you already built are safe.)
 
-**Obsidian mobile toolbar** — Settings → Mobile → toolbar options → add the command **Voice input: append to current note**.
+**Home screen or lock screen widget** — add a Shortcuts widget that runs the same shortcut.
 
-To reach agent mode from a Shortcut, use `action=agent`:
+**Mobile toolbar** — Settings → Mobile → manage toolbar options → add **Voice input: append to current note**.
 
-```
-obsidian://deepvoice?action=agent&text=%E6%9F%A5%E4%B8%80%E4%B8%8B%E6%9C%80%E6%96%B0%E8%BF%9B%E5%B1%95
-```
+Inside the dialog: **Start speaking** → speak → tap again to stop → check the transcript (fix homophones) → **Generate** → **Write to note**.
 
-### Inside the panel
+To skip the dialog entirely, add `&text=...&auto=1`, or turn off *Confirm before writing*.
 
-1. Choose the target mode at the top
-2. Press **● Start speaking** — the button turns into **■ Stop and transcribe (12s)**
-3. Speak, then tap it again
-4. Text appears in the box after a moment — **read it, fix homophone errors**
-5. Press **Generate**
-6. Review the preview, press **Write to note**
+## Commands and URI
 
-Speech recognition will happily turn “笔记” into “比记”. Step 4 is the one that matters.
-
-## URI parameters
-
-Useful for Shortcuts, Alfred, or scripting:
+| Command | Purpose |
+| --- | --- |
+| Voice input: append to current note | Safest way to start |
+| Voice input: rewrite current note | Reorganise the whole note, keep frontmatter |
+| Voice input: create note | New file from speech |
+| AI instruction: research / organise | Agent mode with web access |
+| AI instruction: read links in this note | Batch-read every URL in the current note |
 
 ```
-obsidian://deepvoice?vault=VAULT&mode=MODE&text=TEXT&auto=1
+obsidian://vaultagent?vault=<name>&mode=append|rewrite|create-note&text=<urlencoded>&auto=1
+obsidian://vaultagent?vault=<name>&action=agent&text=<urlencoded>&auto=1
 ```
-
-| Parameter | Values | Meaning |
-| --- | --- | --- |
-| `vault` | vault name | Which vault to open (optional if already inside one) |
-| `action` | `agent` | Opens AI instruction mode instead of the voice panel |
-| `mode` | `append` \| `rewrite` \| `selection` \| `create-note` | Target |
-| `text` | URL-encoded string | Pre-fills the input box |
-| `auto` | `1` | Submit immediately instead of waiting for a click |
-
-Note: `text` requires URL encoding. With `auto=1` and text present, the plugin starts generating on open — so a Shortcut can do *dictate → encode → open URL* and skip the panel entirely.
 
 ## Settings
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| API key | empty | Stored in the vault's `data.json`, sent only to your configured endpoint |
-| Base URL | `https://api.deepseek.com` | Change for a proxy or compatible gateway; `/v1` optional |
-| Model | `deepseek-flash` | Or `deepseek-v4-pro` for harder rewriting |
-| Thinking mode | off | Off is faster and cheaper for editing; on helps long-form restructuring |
-| Speech to text | on | Uses `/v1/tools/asr`; turn off to dictate with the system keyboard instead |
-| Max characters | 4000 | Caps generated output |
-| Context limit | 6000 | Long notes are sent as head 60% + tail 40% |
-| Extra instructions | empty | Appended to every prompt — e.g. “write in Chinese, use bullet points only” |
-| Confirm before writing | on | Shows the preview. Turn off for fully hands-free writing |
-| Web search | on | Lets the agent call DeepSeek's search and URL reader |
-| Results per search | 8 | 3–20; more context, slower and pricier |
-| Max steps | 6 | Model decisions per instruction, 2–12 |
-| Characters per note | 20000 | Cap when the agent reads a note |
-| Allow delete | off | The agent may queue a trash operation (still needs your click) |
+| API key | empty | Stored in `data.json` in your vault |
+| Base URL / model | api.deepseek.com / deepseek-flash | `deepseek-v4-pro` for hard rewrites |
+| Thinking mode | off | On = better reasoning, slower, pricier |
+| Transcribe with DeepSeek | on | Off = type instead of record |
+| Allow web search | on | Off = agent refuses to search |
+| Results per search | 8 | 1–20 |
+| Max agent steps | 6 | Hard cap 12, protects your balance |
+| Note context limit | 6,000 chars | Sent with each instruction |
+| Confirm before writing | on | Off = fully hands-free |
+| Agent may trash notes | off | Trash only, never a hard delete |
 
-## Privacy
+## Safety model
 
-- No telemetry, no analytics, no crash reporting, no remote logging.
-- The key lives in `.obsidian/plugins/deepseek-voice-notes/data.json` inside your vault.
-- Audio goes to the speech endpoint only when you record inside the plugin and speech-to-text is enabled.
-- Text goes to the chat endpoint only when you press **Generate** or **Execute**.
-- In agent mode, your search query travels to `/v1/tools/search` and the URL to `/v1/tools/fetch`; the pages themselves are fetched by DeepSeek, not by your device.
-- Note contents are sent only when the agent decides to call `read_note`, and only for notes it needs.
-- Nothing is written to your vault until you press **Write to note** or **Execute these operations**.
-- The only network destination is the base URL you configure.
+- **Read tools run; write tools queue.** The agent proposes, you press *Run these actions*.
+- Paths are validated: no `..`, no absolute paths, no `.obsidian`, no dotfolders.
+- Limits: 12 queued writes, 200k characters per write, 6 steps per run (max 12).
+- Deleting is disabled by default, goes to the trash, and asks twice.
+- Rewriting a note keeps YAML frontmatter; notes over 800 KB are refused rather than truncated.
 
-## Limits
+## Privacy and network
 
-- Audio per request: ≤ 120 seconds, ≤ 8 MiB (DeepSeek ASR limit)
-- Notes larger than 800 KB are refused for full rewrites rather than truncated silently
-- Rewriting a note keeps frontmatter but replaces everything else — version control or file recovery is your friend
-- Agent runs are capped at 12 queued writes and 12 model steps; long multi-note jobs should be split
-- Search results are whatever DeepSeek's index returns — check the cited URL before trusting a number
-- iOS cannot be triggered by hardware volume keys; Back Tap / widget / toolbar are the supported entries
+The plugin talks to exactly one host: whatever you put in **Base URL** (default `https://api.deepseek.com`).
+
+- Audio leaves your device only when you record inside the plugin, and only to the speech endpoint.
+- Note text leaves your device only when you press **Generate** or **Send**.
+- Nothing is written to your vault until you approve.
+- No telemetry, no analytics, no account, no licence check.
+- Your key sits in `.obsidian/plugins/deepseek-vault-agent/data.json`. If that vault syncs, the key syncs too — don't put it in a public vault.
+
+## Limits worth knowing
+
+- **No background jobs.** Plugins only run while Obsidian is open; iOS will not wake it on a schedule. For "every morning at 8", use an iOS Shortcuts automation to open the URI.
+- **No email access.** Gmail needs OAuth and raw sockets, neither of which the Obsidian WebView offers. Workaround: forward mail into a note (or an email→RSS service), then run *AI instruction: read links in this note*.
+- **No streaming.** Responses arrive in one piece; long runs feel like a pause followed by a result.
+- **Web tools need to be enabled on your DeepSeek account.** If they are not, the agent reports the error instead of silently guessing.
 
 ## Development
 
 ```bash
 npm install
-npm run dev       # watch build
-npm run build     # typecheck + production bundle
-npm test          # offline tests against the real bundle
-npm run package   # produce dist/deepseek-voice-notes/
+npm run dev      # watch
+npm run build    # typecheck + bundle
+npm test         # 3 offline suites: voice flow, API layer, agent tools/paths
+npm run package  # dist/deepseek-vault-agent/
 ```
 
-Source is in `src/`. `main.js` is the only runtime artifact and has no runtime dependencies. Tests load the real built bundle against a stubbed Obsidian module, so they exercise the shipped code rather than a copy of it.
+Tests load the real bundle against stubbed Obsidian modules, so they run with no network and no vault.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT.

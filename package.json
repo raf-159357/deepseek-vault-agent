@@ -1,13 +1,13 @@
 {
-	"name": "deepseek-voice-notes",
-	"version": "0.1.0",
+	"name": "deepseek-vault-agent",
+	"version": "0.3.0",
 	"description": "Obsidian plugin: voice-first note editing with DeepSeek",
 	"main": "main.js",
 	"private": true,
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
-		"test": "node scripts/smoke.mjs && node scripts/api-test.mjs",
+		"test": "node scripts/smoke.mjs && node scripts/api-test.mjs && node scripts/build-agent-test.mjs && node scripts/agent-test.mjs",
 		"package": "node scripts/package.mjs"
 	},
 	"devDependencies": {

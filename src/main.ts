@@ -61,8 +61,9 @@ export default class DeepSeekVoicePlugin extends Plugin {
 
 		// obsidian://deepvoice?vault=库名&mode=append&text=...&auto=1
 		// action=agent 时进入 AI 指令模式：obsidian://deepvoice?action=agent&text=...&auto=1
-		// 供 iOS 快捷指令 / 轻点背面 / 操作按钮调用
-		this.registerObsidianProtocolHandler("deepvoice", (params) => {
+		// 供 iOS 快捷指令 / 轻点背面 / 操作按钮调用。
+		// 兼容：旧链接 deepvoice 永久保留，新名字 vaultagent 等价，两者都能用。
+		const protocolHandler = (params: Record<string, string>) => {
 			const rawMode = pick(params, "mode");
 			const mode = VALID_MODES.includes(rawMode as VoiceMode) ? (rawMode as VoiceMode) : undefined;
 			const text = pick(params, "text", "q");
@@ -81,14 +82,17 @@ export default class DeepSeekVoicePlugin extends Plugin {
 				presetText: preset,
 				autoSubmit: autoFlag,
 			});
-		});
+		};
+
+		this.registerObsidianProtocolHandler("deepvoice", protocolHandler);
+		this.registerObsidianProtocolHandler("vaultagent", protocolHandler);
 
 		this.addSettingTab(new VoiceNotesSettingTab(this.app, this));
 
 		if (!this.settings.apiKey) {
 			// 首次安装给一次提示，等界面就绪再弹，避免用裸定时器
 			this.app.workspace.onLayoutReady(() => {
-				new Notice("DeepSeek Voice Notes：还没填 API Key，去「设置 → 第三方插件」里填。", 8000);
+				new Notice("DeepSeek Vault Agent：还没填 API Key，去「设置 → 第三方插件」里填。", 8000);
 			});
 		}
 	}

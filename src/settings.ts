@@ -61,12 +61,12 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl("h2", { text: "DeepSeek Voice Notes" });
+		containerEl.createEl("h2", { text: "DeepSeek Vault Agent" });
 
 		new Setting(containerEl)
 			.setName("DeepSeek API Key")
 			.setDesc(
-				"只存在本库 .obsidian/plugins/deepseek-voice-notes/data.json 里。库若同步到 iCloud / Obsidian Sync，这个 key 也会跟着过去，别把它放进公开库或公开仓库。"
+				"只存在本库 .obsidian/plugins/deepseek-vault-agent/data.json 里。库若同步到 iCloud / Obsidian Sync，这个 key 也会跟着过去，别把它放进公开库或公开仓库。"
 			)
 			.addText((text) => {
 				text.inputEl.type = "password";

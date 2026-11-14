@@ -150,7 +150,7 @@ export async function writeResult(plugin: DeepSeekVoicePlugin, ctx: VoiceContext
 		const frontmatter = [
 			"---",
 			`created: ${isoTimestamp()}`,
-			"source: deepseek-voice-notes",
+			"source: deepseek-vault-agent",
 			res.title ? `title: "${name.replace(/"/g, "'")}"` : null,
 			"---",
 			"",
