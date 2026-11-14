@@ -4,7 +4,7 @@ import process from "process";
 const prod = process.argv[2] === "production";
 
 const banner = `/*
-DeepSeek Voice Notes — built ${new Date().toISOString()}
+DeepSeek Vault Agent — built ${new Date().toISOString()}
 个人自用插件，未发布到 Obsidian 社区市场。
 */`;
 
