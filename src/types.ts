@@ -30,3 +30,36 @@ export interface ChatMessage {
 	role: "system" | "user" | "assistant";
 	content: string;
 }
+
+/** 模型请求调用的函数（OpenAI 兼容格式） */
+export interface ToolCall {
+	id: string;
+	type: "function";
+	function: { name: string; arguments: string };
+}
+
+/** Agent 对话里的一条消息，比 ChatMessage 多出 tool 角色 */
+export type AgentMessage =
+	| { role: "system" | "user"; content: string }
+	| { role: "assistant"; content: string; tool_calls?: ToolCall[] }
+	| { role: "tool"; content: string; tool_call_id: string };
+
+/** 需要在用户确认后才真正落盘的写操作 */
+export type PendingOp =
+	| { kind: "write"; path: string; mode: "create" | "append" | "overwrite"; content: string }
+	| { kind: "folder"; path: string }
+	| { kind: "move"; from: string; to: string }
+	| { kind: "delete"; path: string };
+
+export interface AgentStep {
+	tool: string;
+	/** 给界面显示的一句话，例如「搜索：obsidian 插件」 */
+	label: string;
+	ok: boolean;
+}
+
+export interface AgentRunResult {
+	reply: string;
+	steps: AgentStep[];
+	pending: PendingOp[];
+}

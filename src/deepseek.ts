@@ -1,5 +1,5 @@
 import { requestUrl } from "obsidian";
-import type { ChatMessage } from "./types";
+import type { AgentMessage, ChatMessage, ToolCall } from "./types";
 import type { DeepSeekVoiceSettings } from "./settings";
 
 export class ApiError extends Error {
@@ -21,7 +21,7 @@ export function joinUrl(baseUrl: string, path: string): string {
 	return `${base}${path}`;
 }
 
-function mapHttpError(status: number, body: string): ApiError {
+export function mapHttpError(status: number, body: string): ApiError {
 	let detail = body;
 	try {
 		const parsed = JSON.parse(body);
@@ -155,4 +155,84 @@ export async function transcribe(settings: DeepSeekVoiceSettings, wav: Uint8Arra
 	const text = (data?.text ?? "").trim();
 	if (!text) throw new ApiError("没有识别出内容，可能太短或环境太吵。再说一次试试。");
 	return text;
+}
+
+/** 通用 POST：语音之外的接口（工具调用、联网搜索、读网页）都走这里 */
+export async function postJson(
+	settings: DeepSeekVoiceSettings,
+	path: string,
+	body: Record<string, unknown>
+): Promise<any> {
+	if (!settings.apiKey || !settings.apiKey.trim()) {
+		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Voice Notes。");
+	}
+
+	let res;
+	try {
+		res = await requestUrl({
+			url: joinUrl(settings.baseUrl, path),
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${settings.apiKey.trim()}`,
+			},
+			body: JSON.stringify(body),
+			throw: false,
+		});
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		throw new ApiError(`网络请求失败：${msg}。检查网络，或确认「接口地址」是否正确。`);
+	}
+
+	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
+
+	try {
+		return res.json;
+	} catch {
+		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
+	}
+}
+
+export interface ToolsReply {
+	/** 模型要说的话，可能为空（表示它只想调工具） */
+	content: string;
+	/** 模型请求调用的函数，可能为空（表示它已经给出最终回答） */
+	toolCalls: ToolCall[];
+}
+
+/**
+ * 带函数调用的对话。工具由客户端执行，模型只负责决定调哪个。
+ * 注意：Chat Completions 不支持在历史中间插入工具消息，所以只能按顺序追加。
+ */
+export async function chatWithTools(
+	settings: DeepSeekVoiceSettings,
+	messages: AgentMessage[],
+	tools: unknown[]
+): Promise<ToolsReply> {
+	const body: Record<string, unknown> = {
+		model: settings.model,
+		messages,
+		stream: false,
+		max_tokens: settings.maxTokens,
+		thinking: { type: settings.thinking ? "enabled" : "disabled" },
+		tools,
+		tool_choice: "auto",
+	};
+	if (!settings.thinking) body.temperature = settings.temperature;
+
+	const data = await postJson(settings, "/chat/completions", body);
+	const message = data?.choices?.[0]?.message;
+	if (!message) throw new ApiError("DeepSeek 没有返回 message，可能是接口地址不对。");
+
+	const rawCalls: unknown[] = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+	const toolCalls: ToolCall[] = rawCalls.map((c: any, i: number) => ({
+		id: typeof c?.id === "string" && c.id ? c.id : `call_${i}`,
+		type: "function" as const,
+		function: {
+			name: String(c?.function?.name ?? ""),
+			arguments: typeof c?.function?.arguments === "string" ? c.function.arguments : "{}",
+		},
+	})).filter((c) => c.function.name);
+
+	return { content: typeof message.content === "string" ? message.content : "", toolCalls };
 }

@@ -16,6 +16,13 @@ export interface DeepSeekVoiceSettings {
 	newNoteFolder: string;
 	extraSystemPrompt: string;
 	asrEnabled: boolean;
+	/** —— 以下是 0.2 的 AI 指令（联网 + 读库 + 写库） —— */
+	webSearchEnabled: boolean;
+	searchCount: number;
+	agentMaxSteps: number;
+	agentContextChars: number;
+	/** 默认关：允许 AI 把笔记移入回收站 */
+	allowDelete: boolean;
 }
 
 export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
@@ -31,6 +38,11 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	newNoteFolder: "",
 	extraSystemPrompt: "",
 	asrEnabled: true,
+	webSearchEnabled: true,
+	searchCount: 8,
+	agentMaxSteps: 6,
+	agentContextChars: 20000,
+	allowDelete: false,
 };
 
 export const MODEL_OPTIONS: Record<string, string> = {
@@ -132,9 +144,77 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				})
 			);
 
+		containerEl.createEl("h3", { text: "AI 指令（联网与知识库操作）" });
+
 		new Setting(containerEl)
-			.setName("默认动作")
-			.setDesc("从命令或 URI 触发时用的默认落点。")
+			.setName("允许联网搜索")
+			.setDesc(
+				"开启后 AI 能调用 DeepSeek 的联网搜索和读网页接口：给个链接它能打开看，问到最新进展它会自己查。关掉就只能用模型已有知识。"
+			)
+			.addToggle((tg) =>
+				tg.setValue(this.plugin.settings.webSearchEnabled).onChange(async (value) => {
+					this.plugin.settings.webSearchEnabled = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("每次搜索返回条数")
+			.setDesc("默认 8 条。条数越多信息越全，但塞进上下文的字也越多，更慢更贵。")
+			.addSlider((slider) =>
+				slider
+					.setLimits(3, 20, 1)
+					.setValue(this.plugin.settings.searchCount)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.searchCount = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("最多执行步数")
+			.setDesc(
+				"一步 = 一次「想一下 → 调一个工具」。查资料再写笔记通常要 3–5 步。上限 12，越大越能完成复杂任务，也越慢越贵。"
+			)
+			.addSlider((slider) =>
+				slider
+					.setLimits(2, 12, 1)
+					.setValue(this.plugin.settings.agentMaxSteps)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.agentMaxSteps = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("单次读取笔记的字数上限")
+			.setDesc("AI 读一篇笔记时最多拿这么多字，超出会截断。默认 20000。")
+			.addText((text) => {
+				text.inputEl.type = "number";
+				text.setValue(String(this.plugin.settings.agentContextChars)).onChange(async (value) => {
+					const n = Number(value);
+					if (Number.isFinite(n) && n >= 1000) {
+						this.plugin.settings.agentContextChars = Math.floor(n);
+						await this.plugin.saveSettings();
+					}
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("允许 AI 把笔记移入回收站")
+			.setDesc(
+				"默认关闭。开启后 AI 也只是把删除放进确认队列，你点了才会执行，而且是移入回收站而不是永久删除。"
+			)
+			.addToggle((tg) =>
+				tg.setValue(this.plugin.settings.allowDelete).onChange(async (value) => {
+					this.plugin.settings.allowDelete = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl).setName("默认动作").setDesc("从命令或 URI 触发时用的默认落点。")
 			.addDropdown((dd) => {
 				dd.addOption("append", "追加到当前笔记末尾");
 				dd.addOption("replace-note", "改写当前笔记全文");
