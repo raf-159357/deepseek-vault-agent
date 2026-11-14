@@ -1,3 +1,4 @@
+import { F } from "./i18n";
 import { ApiError, postJson } from "./deepseek";
 import type { DeepSeekVoiceSettings } from "./settings";
 import { asArray, asString, get, text } from "./json";
@@ -23,8 +24,8 @@ export async function webSearch(
 	count = 8
 ): Promise<SearchHit[]> {
 	const q = (query || "").trim();
-	if (!q) throw new ApiError("搜索词是空的。");
-	if (q.length > MAX_QUERY) throw new ApiError(`搜索词最多 ${MAX_QUERY} 个字符，请缩短一点。`);
+	if (!q) throw new ApiError(F.emptyQuery());
+	if (q.length > MAX_QUERY) throw new ApiError(F.queryTooLong(MAX_QUERY));
 
 	const n = Math.min(50, Math.max(1, Math.floor(count) || 8));
 	const data = await postJson(settings, "/v1/tools/search", {
@@ -70,12 +71,12 @@ const MAX_PAGE_CHARS = 12000;
  */
 export async function readUrl(settings: DeepSeekVoiceSettings, url: string): Promise<PageContent> {
 	const u = (url || "").trim();
-	if (!/^https?:\/\//i.test(u)) throw new ApiError(`不是有效的网页地址：${u}`);
+	if (!/^https?:\/\//i.test(u)) throw new ApiError(F.badUrl(u));
 
 	const data = await postJson(settings, "/v1/tools/fetch", { url: u });
 	const content = text(get(data, "content"));
 	if (!content.trim()) {
-		throw new ApiError("这个网页抓不到正文，可能是需要登录、纯图片，或者被站点拦了。");
+		throw new ApiError(F.noPageBody());
 	}
 	return {
 		title: text(get(data, "title")) || u,

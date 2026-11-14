@@ -25,7 +25,7 @@ export function buildSystemPrompt(settings: DeepSeekVoiceSettings): string {
 		'  "action": "append" | "replace-selection" | "replace-note" | "create-note",',
 		'  "title": "新建笔记时的标题，不含 .md、不含斜杠；其他动作可留空",',
 		'  "content": "要写入的 Markdown 正文",',
-		'  "summary": "一句话中文说明你做了什么，供用户确认",',
+		'  "summary": "一句话说明你做了什么，供用户确认（语言跟随用户）",',
 		'  "notes": "你不确定的地方或需要用户注意的点，没有就留空字符串"',
 		"}",
 		"",
@@ -42,31 +42,35 @@ export function buildSystemPrompt(settings: DeepSeekVoiceSettings): string {
 		.join("\n");
 }
 
-export function buildUserPrompt(ctx: VoiceContext, instruction: string, mode: VoiceMode, settings: DeepSeekVoiceSettings): string {
+/**
+ * 会变的部分（指令、落点）单独放最后一条消息，笔记正文放在前面那条。
+ *
+ * 这么拆是为了缓存：前缀只要有一个字节不同就整段作废，按全价计费。
+ * 同一篇笔记反复改（先追加、再润色、再补一句）时，正文那一大块逐字节一致，
+ * 第二次起就按命中价（1/50）算；不同笔记之间至少系统提示词和工具壳还能命中。
+ */
+export function buildDocMessage(ctx: VoiceContext, settings: DeepSeekVoiceSettings): string | null {
+	const where = ctx.file ? ctx.file.path : "";
+	const body =
+		ctx.selection && ctx.selection.trim()
+			? ctx.selection
+			: truncateMiddle(ctx.noteContent, settings.contextChars);
+	if (!body.trim()) return where ? `【当前笔记：${where}】\n\n（这篇笔记还是空的）` : null;
+	const head = where ? `【当前笔记：${where}】` : "【当前文档】";
+	return `${head}\n\n${body}`;
+}
+
+export function buildTaskMessage(ctx: VoiceContext, instruction: string, mode: VoiceMode): string {
 	const parts: string[] = [];
 	parts.push(`【本次落点】${mode} —— ${MODE_LABEL[mode]}`);
-	parts.push(`【当前笔记】${ctx.file ? ctx.file.path : "（没有打开任何笔记，只能新建）"}`);
-
-	if (mode === "replace-selection") {
-		parts.push("");
-		parts.push("【选中的原文（content 只返回改写后的这段文字）】");
-		parts.push(ctx.selection || "（空）");
-	} else if (ctx.noteContent.trim()) {
-		parts.push("");
-		parts.push(
-			mode === "create-note"
-				? "【当前笔记正文（仅作为风格与上下文参考，不要整篇搬进新笔记）】"
-				: "【当前笔记正文】"
-		);
-		parts.push(truncateMiddle(ctx.noteContent, settings.contextChars));
-	}
-
+	if (!ctx.file) parts.push("【当前笔记】（没有打开任何笔记，只能新建）");
+	if (mode === "replace-selection") parts.push("【改写范围】上面那段就是我选中的文字，content 只返回改写后的这一段，不要重写整篇。");
+	if (mode === "create-note") parts.push("【上面的正文】只作风格与上下文参考，不要整篇搬进新笔记。");
 	parts.push("");
 	parts.push("【用户语音指令】");
 	parts.push(instruction.trim());
 	parts.push("");
 	parts.push(`请输出符合落点 ${mode} 的单个 JSON 对象。`);
-
 	return parts.join("\n");
 }
 
@@ -76,8 +80,9 @@ export function buildMessages(
 	mode: VoiceMode,
 	settings: DeepSeekVoiceSettings
 ): ChatMessage[] {
-	return [
-		{ role: "system", content: buildSystemPrompt(settings) },
-		{ role: "user", content: buildUserPrompt(ctx, instruction, mode, settings) },
-	];
+	const messages: ChatMessage[] = [{ role: "system", content: buildSystemPrompt(settings) }];
+	const doc = buildDocMessage(ctx, settings);
+	if (doc) messages.push({ role: "user", content: doc });
+	messages.push({ role: "user", content: buildTaskMessage(ctx, instruction, mode) });
+	return messages;
 }

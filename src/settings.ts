@@ -1,7 +1,10 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type DeepSeekVoicePlugin from "./main";
 import { chatCompletion } from "./deepseek";
+import { F, s, setLang, isEn } from "./i18n";
 import type { VoiceMode } from "./types";
+import { AGENT_STEP_LIMIT } from "./types";
+import { estimateCost, savedByCache } from "./usage";
 
 export interface DeepSeekVoiceSettings {
 	apiKey: string;
@@ -23,7 +26,27 @@ export interface DeepSeekVoiceSettings {
 	agentContextChars: number;
 	/** 默认关：允许 AI 把笔记移入回收站 */
 	allowDelete: boolean;
+	/** —— 0.4：界面语言与手机悬浮按钮 —— */
+	uiLang: "auto" | "zh" | "en";
+	floatingButton: boolean;
+	fabRight: number;
+	fabBottom: number;
+	/** —— 0.6：累计用量，用来观察缓存命中率 —— */
+	cacheStats: CacheStats;
 }
+
+export interface CacheStats {
+	/** 请求次数 */
+	req: number;
+	/** 命中缓存的输入 token */
+	hit: number;
+	/** 未命中的输入 token */
+	miss: number;
+	/** 输出 token */
+	out: number;
+}
+
+export const EMPTY_STATS: CacheStats = { req: 0, hit: 0, miss: 0, out: 0 };
 
 export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	apiKey: "",
@@ -40,15 +63,35 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	asrEnabled: true,
 	webSearchEnabled: true,
 	searchCount: 8,
-	agentMaxSteps: 6,
+	agentMaxSteps: 8,
 	agentContextChars: 20000,
 	allowDelete: false,
+	uiLang: "auto",
+	floatingButton: true,
+	fabRight: 16,
+	fabBottom: 96,
+	cacheStats: { ...EMPTY_STATS },
 };
 
-export const MODEL_OPTIONS: Record<string, string> = {
-	"deepseek-flash": "deepseek-flash（V4.1-Flash，快且便宜，日常够用）",
-	"deepseek-v4-pro": "deepseek-v4-pro（更强，慢一些、贵一些）",
-};
+/** 老版本的数据里没有 cacheStats，补一个默认值，避免读 undefined */
+export function normalizeSettings(data: Partial<DeepSeekVoiceSettings>): DeepSeekVoiceSettings {
+	const merged: DeepSeekVoiceSettings = Object.assign({}, DEFAULT_SETTINGS, data);
+	merged.cacheStats = Object.assign({}, EMPTY_STATS, data.cacheStats ?? {});
+	return merged;
+}
+
+export function modelOptions(): Record<string, string> {
+	if (isEn()) {
+		return {
+			"deepseek-flash": "deepseek-flash (V4.1-Flash — fast and cheap, fine for daily use)",
+			"deepseek-v4-pro": "deepseek-v4-pro (stronger, slower, pricier)",
+		};
+	}
+	return {
+		"deepseek-flash": "deepseek-flash（V4.1-Flash，快且便宜，日常够用）",
+		"deepseek-v4-pro": "deepseek-v4-pro（更强，慢一些、贵一些）",
+	};
+}
 
 export class VoiceNotesSettingTab extends PluginSettingTab {
 	plugin: DeepSeekVoicePlugin;
@@ -61,11 +104,11 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		const t = s;
+
 		new Setting(containerEl)
-			.setName("DeepSeek API Key")
-			.setDesc(
-				`只存在本库 ${this.app.vault.configDir}/plugins/deepseek-vault-agent/data.json 里。库若同步到 iCloud / Obsidian Sync，这个 key 也会跟着过去，别把它放进公开库或公开仓库。`
-			)
+			.setName(t("setApiKeyName"))
+			.setDesc(t("setApiKeyDesc"))
 			.addText((text) => {
 				text.inputEl.type = "password";
 				text.inputEl.autocapitalize = "off";
@@ -78,42 +121,39 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 					});
 			})
 			.addButton((btn) =>
-				btn.setButtonText("测试连接").onClick(async () => {
+				btn.setButtonText(t("setTest")).onClick(async () => {
 					btn.setDisabled(true);
-					btn.setButtonText("测试中…");
+					btn.setButtonText(t("setTesting"));
 					try {
 						const reply = await chatCompletion(this.plugin.settings, [
-							{ role: "system", content: "只回复两个字：可用" },
+							{ role: "system", content: isEn() ? "Reply with one word: ok" : "只回复两个字：可用" },
 							{ role: "user", content: "ping" },
 						]);
-						new Notice(`连接成功：${reply.slice(0, 40)}`);
+						new Notice(`${isEn() ? "Connected: " : "连接成功："}${reply.slice(0, 40)}`);
 					} catch (err) {
-						new Notice(`连接失败：${errorText(err)}`, 10000);
+						new Notice(`${isEn() ? "Failed: " : "连接失败："}${errorText(err)}`, 10000);
 					} finally {
 						btn.setDisabled(false);
-						btn.setButtonText("测试连接");
+						btn.setButtonText(t("setTest"));
 					}
 				})
 			);
 
-		new Setting(containerEl)
-			.setName("接口地址")
-			.setDesc("默认 https://api.deepseek.com。用中转或代理时填到 /chat 之前的位置，带不带 /v1 都能识别。")
-			.addText((text) =>
-				text
-					.setPlaceholder("https://api.deepseek.com")
-					.setValue(this.plugin.settings.baseUrl)
-					.onChange(async (value) => {
-						this.plugin.settings.baseUrl = value.trim() || DEFAULT_SETTINGS.baseUrl;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(containerEl).setName(t("setBaseName")).setDesc(t("setBaseDesc")).addText((text) =>
+			text
+				.setPlaceholder("https://api.deepseek.com")
+				.setValue(this.plugin.settings.baseUrl)
+				.onChange(async (value) => {
+					this.plugin.settings.baseUrl = value.trim() || DEFAULT_SETTINGS.baseUrl;
+					await this.plugin.saveSettings();
+				})
+		);
 
 		new Setting(containerEl)
-			.setName("模型")
-			.setDesc("两个模型都支持 JSON 输出和语音转写；模型名写错会直接报 400。")
+			.setName(t("setModelName"))
+			.setDesc(t("setModelDesc"))
 			.addDropdown((dd) => {
-				for (const [id, label] of Object.entries(MODEL_OPTIONS)) dd.addOption(id, label);
+				for (const [id, label] of Object.entries(modelOptions())) dd.addOption(id, label);
 				dd.setValue(this.plugin.settings.model).onChange(async (value) => {
 					this.plugin.settings.model = value;
 					await this.plugin.saveSettings();
@@ -121,8 +161,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("思考模式")
-			.setDesc("默认关闭：笔记改写不需要长推理，关掉更快更省。开启后温度参数失效，输出前会先想一段。")
+			.setName(t("setThinkingName"))
+			.setDesc(t("setThinkingDesc"))
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.thinking).onChange(async (value) => {
 					this.plugin.settings.thinking = value;
@@ -131,10 +171,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("用 DeepSeek 转写语音")
-			.setDesc(
-				"开启后弹窗里多一个录音按钮：录完上传到 /v1/tools/asr 转成文字。限制 120 秒 / 8 MiB。关掉就只用键盘自带的语音输入。"
-			)
+			.setName(t("setAsrName"))
+			.setDesc(t("setAsrDesc"))
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.asrEnabled).onChange(async (value) => {
 					this.plugin.settings.asrEnabled = value;
@@ -142,13 +180,11 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl).setName("AI 指令（联网与知识库操作）").setHeading();
+		new Setting(containerEl).setName(t("setAgentHead")).setHeading();
 
 		new Setting(containerEl)
-			.setName("允许联网搜索")
-			.setDesc(
-				"开启后 AI 能调用 DeepSeek 的联网搜索和读网页接口：给个链接它能打开看，问到最新进展它会自己查。关掉就只能用模型已有知识。"
-			)
+			.setName(t("setWebName"))
+			.setDesc(t("setWebDesc"))
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.webSearchEnabled).onChange(async (value) => {
 					this.plugin.settings.webSearchEnabled = value;
@@ -157,8 +193,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("每次搜索返回条数")
-			.setDesc("默认 8 条。条数越多信息越全，但塞进上下文的字也越多，更慢更贵。")
+			.setName(t("setSearchName"))
+			.setDesc(t("setSearchDesc"))
 			.addSlider((slider) =>
 				slider
 					.setLimits(3, 20, 1)
@@ -170,13 +206,11 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("最多执行步数")
-			.setDesc(
-				"一步 = 一次「想一下 → 调一个工具」。查资料再写笔记通常要 3–5 步。上限 12，越大越能完成复杂任务，也越慢越贵。"
-			)
+			.setName(t("setStepsName"))
+			.setDesc(t("setStepsDesc"))
 			.addSlider((slider) =>
 				slider
-					.setLimits(2, 12, 1)
+					.setLimits(2, AGENT_STEP_LIMIT, 1)
 					.setValue(this.plugin.settings.agentMaxSteps)
 					.onChange(async (value) => {
 						this.plugin.settings.agentMaxSteps = value;
@@ -185,8 +219,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("单次读取笔记的字数上限")
-			.setDesc("AI 读一篇笔记时最多拿这么多字，超出会截断。默认 20000。")
+			.setName(t("setCtxName"))
+			.setDesc(t("setCtxDesc"))
 			.addText((text) => {
 				text.inputEl.type = "number";
 				text.setValue(String(this.plugin.settings.agentContextChars)).onChange(async (value) => {
@@ -199,10 +233,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("允许 AI 把笔记移入回收站")
-			.setDesc(
-				"默认关闭。开启后 AI 也只是把删除放进确认队列，你点了才会执行，而且是移入回收站而不是永久删除。"
-			)
+			.setName(t("setDeleteName"))
+			.setDesc(t("setDeleteDesc"))
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.allowDelete).onChange(async (value) => {
 					this.plugin.settings.allowDelete = value;
@@ -210,21 +242,20 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl).setName("默认动作").setDesc("从命令或 URI 触发时用的默认落点。")
-			.addDropdown((dd) => {
-				dd.addOption("append", "追加到当前笔记末尾");
-				dd.addOption("replace-note", "改写当前笔记全文");
-				dd.addOption("replace-selection", "改写选中的段落");
-				dd.addOption("create-note", "新建一篇笔记");
-				dd.setValue(this.plugin.settings.defaultMode).onChange(async (value) => {
-					this.plugin.settings.defaultMode = value as VoiceMode;
-					await this.plugin.saveSettings();
-				});
+		new Setting(containerEl).setName(t("setModeHead")).setDesc(t("setModeDesc")).addDropdown((dd) => {
+			dd.addOption("append", t("setModeAppend"));
+			dd.addOption("replace-note", t("setModeRewrite"));
+			dd.addOption("replace-selection", t("setModeSelection"));
+			dd.addOption("create-note", t("setModeCreate"));
+			dd.setValue(this.plugin.settings.defaultMode).onChange(async (value) => {
+				this.plugin.settings.defaultMode = value as VoiceMode;
+				await this.plugin.saveSettings();
 			});
+		});
 
 		new Setting(containerEl)
-			.setName("写入前需要确认")
-			.setDesc("开启后先看预览再点「写入笔记」。语音识别会有偏差，建议保持开启。")
+			.setName(t("setConfirmName"))
+			.setDesc(t("setConfirmDesc"))
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.requireConfirm).onChange(async (value) => {
 					this.plugin.settings.requireConfirm = value;
@@ -233,8 +264,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("随指令发送的笔记字数上限")
-			.setDesc("当前笔记超过这个字数时只发开头 60% 和结尾 40%。默认 6000 字，越大越慢越贵。")
+			.setName(t("setNoteCtxName"))
+			.setDesc(t("setNoteCtxDesc"))
 			.addText((text) => {
 				text.inputEl.type = "number";
 				text.setValue(String(this.plugin.settings.contextChars)).onChange(async (value) => {
@@ -247,8 +278,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("新笔记存放文件夹")
-			.setDesc("留空表示库根目录。不存在会自动创建，例如 00_Inbox。")
+			.setName(t("setFolderName"))
+			.setDesc(t("setFolderDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder("00_Inbox")
@@ -260,8 +291,8 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("温度")
-			.setDesc("0 更保守，1 更发散。改写建议 0.2–0.4；开了思考模式时这项无效。")
+			.setName(t("setTempName"))
+			.setDesc(t("setTempDesc"))
 			.addSlider((slider) =>
 				slider
 					.setLimits(0, 1, 0.05)
@@ -273,10 +304,10 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("额外写作要求")
-			.setDesc("追加到系统提示词，例如「标题不要加序号」「改写时保留双链」。")
+			.setName(t("setExtraName"))
+			.setDesc(t("setExtraDesc"))
 			.addTextArea((ta) => {
-				ta.setPlaceholder("可选")
+				ta.setPlaceholder(t("setExtraPlaceholder"))
 					.setValue(this.plugin.settings.extraSystemPrompt)
 					.onChange(async (value) => {
 						this.plugin.settings.extraSystemPrompt = value;
@@ -285,18 +316,77 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				ta.inputEl.rows = 4;
 			});
 
+		new Setting(containerEl)
+			.setName(t("setUiName"))
+			.setDesc(t("setUiDesc"))
+			.addDropdown((dd) => {
+				dd.addOption("auto", t("uiAuto"));
+				dd.addOption("zh", t("uiZh"));
+				dd.addOption("en", t("uiEn"));
+				dd.setValue(this.plugin.settings.uiLang).onChange(async (value) => {
+					const next = value === "zh" || value === "en" ? value : "auto";
+					this.plugin.settings.uiLang = next;
+					await this.plugin.saveSettings();
+					this.plugin.applyLanguage();
+					this.display();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t("setFabName"))
+			.setDesc(t("setFabDesc"))
+			.addToggle((tg) =>
+				tg.setValue(this.plugin.settings.floatingButton).onChange(async (value) => {
+					this.plugin.settings.floatingButton = value;
+					await this.plugin.saveSettings();
+					this.plugin.syncFab();
+				})
+			);
+
+		this.renderStats(containerEl);
+
 		const help = containerEl.createDiv({ cls: "dsv-settings-help" });
-		new Setting(help).setName("手机上怎么一键唤起").setHeading();
-		help.createEl("p", {
-			text: "iOS 不向第三方 App 开放音量键，「两个音量键同时按」在 Obsidian 里做不到。可用替代：① 设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下 → 选一个快捷指令；② iPhone 15 Pro 以上的操作按钮绑定快捷指令；③ 锁屏小组件。快捷指令动作只需「打开 URL」，填 obsidian://vaultagent?vault=你的库名&mode=append。",
-		});
-		help.createEl("p", {
-			text: "想连语音识别一起省掉一步：快捷指令里用「听写文本」拿到文字，再拼成 obsidian://vaultagent?vault=库名&mode=append&text=文字&auto=1，插件会直接开始处理。",
-		});
+		new Setting(help).setName(t("setHelpHead")).setHeading();
+		help.createEl("p", { text: t("setHelp1") });
+		help.createEl("p", { text: t("setHelp2") });
 	}
+
+	/** 用量与缓存：能看到命中率到底是多少，而不是只听插件说「做了缓存优化」 */
+	private renderStats(containerEl: HTMLElement): void {
+		const stats = this.plugin.settings.cacheStats;
+		const total = stats.hit + stats.miss;
+		const rate = total > 0 ? Math.round((stats.hit / total) * 100) : 0;
+		const usage = { hit: stats.hit, miss: stats.miss, out: stats.out };
+		const model = this.plugin.settings.model;
+		const summary =
+			stats.req > 0
+				? `${s("setStatsDesc")}\n${F.statsSummary(
+						stats.req,
+						rate,
+						estimateCost(usage, model).toFixed(4),
+						savedByCache(usage, model).toFixed(4)
+				  )}`
+				: s("setStatsDesc");
+
+		const setting = new Setting(containerEl)
+			.setName(s("setStatsName"))
+			.setDesc(summary)
+			.addButton((btn) =>
+				btn.setButtonText(s("statsReset")).onClick(async () => {
+					this.plugin.settings.cacheStats = { ...EMPTY_STATS };
+					await this.plugin.saveSettings();
+					new Notice(s("statsCleared"));
+					this.display();
+				})
+			);
+		if (stats.req === 0) setting.settingEl.addClass("dsv-stats-empty");
+	}
+
 }
 
 export function errorText(err: unknown): string {
 	if (err instanceof Error) return err.message;
 	return String(err);
 }
+
+export { setLang };

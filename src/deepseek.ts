@@ -1,7 +1,42 @@
+import { F, s } from "./i18n";
 import { requestUrl } from "obsidian";
-import type { AgentMessage, ChatMessage, ToolCall } from "./types";
+import type { AgentMessage, ChatMessage, ContentPart, ToolCall } from "./types";
 import type { DeepSeekVoiceSettings } from "./settings";
 import { asArray, asRecord, asString, get, text } from "./json";
+import { parseUsage, type Usage } from "./usage";
+
+/** 目前只有 deepseek-flash 收图；v4-pro 发图直接 400 */
+export const VISION_MODEL = "deepseek-flash";
+
+export function supportsVision(model: string): boolean {
+	return /flash/i.test(model);
+}
+
+/** 带图时如果当前模型看不了图，临时换成 flash（不改用户设置） */
+export function resolveModel(model: string, needsVision: boolean): string {
+	if (!needsVision || supportsVision(model)) return model;
+	return VISION_MODEL;
+}
+
+/** 把图片挂到最后一条 user 消息上，文字在前、图片在后 */
+export function withImages(messages: ChatMessage[], images: string[]): ChatMessage[] {
+	if (!images.length) return messages;
+	const list = messages.slice();
+	for (let i = list.length - 1; i >= 0; i--) {
+		const msg = list[i];
+		if (msg.role !== "user") continue;
+		const parts: ContentPart[] =
+			typeof msg.content === "string"
+				? msg.content.trim()
+					? [{ type: "text", text: msg.content }]
+					: []
+				: msg.content.slice();
+		for (const url of images) parts.push({ type: "image_url", image_url: { url, detail: "high" } });
+		list[i] = { role: "user", content: parts };
+		break;
+	}
+	return list;
+}
 
 export class ApiError extends Error {
 	status?: number;
@@ -32,42 +67,54 @@ export function mapHttpError(status: number, body: string): ApiError {
 	}
 	const prefix =
 		status === 400
-			? "请求被拒绝（400）"
+			? F.line("请求被拒绝（400）", "Request rejected (400)")
 			: status === 401
-			? "API Key 无效或没有权限（401）"
+			? F.line("API Key 无效或没有权限（401）", "Invalid API key or no permission (401)")
 			: status === 402
-			? "账户余额不足（402）"
+			? F.line("账户余额不足（402）", "Insufficient balance (402)")
 			: status === 413
-			? "音频文件太大（413）"
+			? F.line("文件太大（413）：图片或音频超出上限", "File too large (413): image or audio over the limit")
 			: status === 429
-			? "请求太频繁被限流（429）"
+			? F.line("请求太频繁被限流（429）", "Rate limited (429)")
 			: status >= 500
-			? `DeepSeek 服务端错误（${status}）`
-			: `请求失败（${status}）`;
+			? F.line(`DeepSeek 服务端错误（${status}）`, `DeepSeek server error (${status})`)
+			: F.line(`请求失败（${status}）`, `Request failed (${status})`);
 	return new ApiError(`${prefix}：${String(detail).slice(0, 300)}`, status, detail);
 }
 
 export interface ChatOptions {
 	/** 是否要求模型输出 JSON（两代模型都支持 json_object） */
 	json?: boolean;
+	/** 附带的图片（data URL），带上就自动切到能看图的模型 */
+	images?: string[];
 }
 
 /**
  * 用 Obsidian 的 requestUrl 直连 DeepSeek。
  * requestUrl 走原生 HTTP，绕开 WebView 的 CORS，桌面和 iOS/Android 都能用。
  */
-export async function chatCompletion(
+export interface ChatResult {
+	text: string;
+	usage: Usage;
+	/** 实际使用的模型（带图时可能临时是 flash） */
+	model: string;
+}
+
+/** 和 chatCompletion 一样，只是把用量也带出来（界面要显示缓存命中） */
+export async function chatCompletionDetailed(
 	settings: DeepSeekVoiceSettings,
 	messages: ChatMessage[],
 	opts: ChatOptions = {}
-): Promise<string> {
+): Promise<ChatResult> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
-		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Vault Agent。");
+		throw new ApiError(s("errNoKey"));
 	}
 
+	const images = (opts.images ?? []).filter((u) => !!u);
+	const model = resolveModel(settings.model, images.length > 0);
 	const body: Record<string, unknown> = {
-		model: settings.model,
-		messages,
+		model,
+		messages: withImages(messages, images),
 		stream: false,
 		max_tokens: settings.maxTokens,
 		// 笔记改写不需要长推理，默认关掉思考模式：更快、更省
@@ -92,7 +139,7 @@ export async function chatCompletion(
 		});
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		throw new ApiError(`网络请求失败：${msg}。检查网络，或确认「接口地址」是否正确。`);
+		throw new ApiError(F.netFail(msg));
 	}
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
@@ -101,14 +148,23 @@ export async function chatCompletion(
 	try {
 		data = res.json;
 	} catch {
-		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
+		throw new ApiError(F.notJson());
 	}
 
 	const content = asString(get(data, "choices", 0, "message", "content"));
 	if (!content || !content.trim()) {
-		throw new ApiError("DeepSeek 返回内容为空。换个说法再试一次。");
+		throw new ApiError(F.emptyReply());
 	}
-	return content;
+	return { text: content, usage: parseUsage(get(data, "usage")), model };
+}
+
+export async function chatCompletion(
+	settings: DeepSeekVoiceSettings,
+	messages: ChatMessage[],
+	opts: ChatOptions = {}
+): Promise<string> {
+	const res = await chatCompletionDetailed(settings, messages, opts);
+	return res.text;
 }
 
 /** 手工拼 multipart/form-data，requestUrl 直接发 ArrayBuffer */
@@ -131,7 +187,7 @@ export function buildWavForm(wav: Uint8Array, filename = "speech.wav"): { body: 
  */
 export async function transcribe(settings: DeepSeekVoiceSettings, wav: Uint8Array): Promise<string> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
-		throw new ApiError("还没有填写 DeepSeek API Key，无法转写语音。");
+		throw new ApiError(s("errNoKeyAsr"));
 	}
 	const { body, contentType } = buildWavForm(wav);
 
@@ -147,7 +203,7 @@ export async function transcribe(settings: DeepSeekVoiceSettings, wav: Uint8Arra
 		});
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		throw new ApiError(`语音上传失败：${msg}`);
+		throw new ApiError(F.asrFail(msg));
 	}
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
@@ -156,10 +212,10 @@ export async function transcribe(settings: DeepSeekVoiceSettings, wav: Uint8Arra
 	try {
 		payload = res.json;
 	} catch {
-		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
+		throw new ApiError(F.notJson());
 	}
 	const transcript = text(get(payload, "text"));
-	if (!transcript) throw new ApiError("没有识别出内容，可能太短或环境太吵。再说一次试试。");
+	if (!transcript) throw new ApiError(F.asrEmpty());
 	return transcript;
 }
 
@@ -170,7 +226,7 @@ export async function postJson(
 	body: Record<string, unknown>
 ): Promise<unknown> {
 	if (!settings.apiKey || !settings.apiKey.trim()) {
-		throw new ApiError("还没有填写 DeepSeek API Key：设置 → 第三方插件 → DeepSeek Vault Agent。");
+		throw new ApiError(s("errNoKey"));
 	}
 
 	let res;
@@ -187,7 +243,7 @@ export async function postJson(
 		});
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		throw new ApiError(`网络请求失败：${msg}。检查网络，或确认「接口地址」是否正确。`);
+		throw new ApiError(F.netFail(msg));
 	}
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
@@ -196,7 +252,7 @@ export async function postJson(
 	try {
 		payload = res.json;
 	} catch {
-		throw new ApiError("DeepSeek 返回的不是 JSON，可能接口地址指到了别的服务。");
+		throw new ApiError(F.notJson());
 	}
 	return payload;
 }
@@ -206,6 +262,8 @@ export interface ToolsReply {
 	content: string;
 	/** 模型请求调用的函数，可能为空（表示它已经给出最终回答） */
 	toolCalls: ToolCall[];
+	/** 这次请求的输入/输出 token 与缓存命中情况 */
+	usage: Usage;
 }
 
 /**
@@ -215,10 +273,11 @@ export interface ToolsReply {
 export async function chatWithTools(
 	settings: DeepSeekVoiceSettings,
 	messages: AgentMessage[],
-	tools: unknown[]
+	tools: unknown[],
+	modelOverride?: string
 ): Promise<ToolsReply> {
 	const body: Record<string, unknown> = {
-		model: settings.model,
+		model: modelOverride || settings.model,
 		messages,
 		stream: false,
 		max_tokens: settings.maxTokens,
@@ -230,7 +289,9 @@ export async function chatWithTools(
 
 	const data = await postJson(settings, "/chat/completions", body);
 	const message = get(data, "choices", 0, "message");
-	if (!asRecord(message)) throw new ApiError("DeepSeek 没有返回 message，可能是接口地址不对。");
+	if (!asRecord(message)) {
+		throw new ApiError(F.line("DeepSeek 没有返回 message，可能是接口地址不对。", "DeepSeek returned no message — the Base URL may be wrong."));
+	}
 
 	const rawCalls = asArray(get(message, "tool_calls"));
 	const toolCalls: ToolCall[] = rawCalls
@@ -244,5 +305,5 @@ export async function chatWithTools(
 		}))
 		.filter((c) => c.function.name);
 
-	return { content: asString(get(message, "content")) ?? "", toolCalls };
+	return { content: asString(get(message, "content")) ?? "", toolCalls, usage: parseUsage(get(data, "usage")) };
 }

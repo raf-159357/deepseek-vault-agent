@@ -2,6 +2,7 @@ import { App, MarkdownView, Notice, TFile, TFolder, normalizePath } from "obsidi
 import type DeepSeekVoicePlugin from "./main";
 import type { VoiceContext, VoiceMode, VoiceResult } from "./types";
 import { asRecord } from "./json";
+import { F, s } from "./i18n";
 
 const VALID_MODES: VoiceMode[] = ["append", "replace-selection", "replace-note", "create-note"];
 
@@ -33,8 +34,11 @@ export function parseResult(raw: string, fallbackMode: VoiceMode): VoiceResult {
 		return {
 			action: fallbackMode,
 			content: cleaned,
-			summary: "模型没有按结构化格式返回，已按原文处理",
-			notes: "建议重新生成一次，或把指令说得更具体。",
+			summary: F.line(
+				"模型没有按结构化格式返回，已按原文处理",
+				"The model did not return structured output, so the raw text is used"
+			),
+			notes: F.line("建议重新生成一次，或把指令说得更具体。", "Try generating again, or make the instruction more specific."),
 		};
 	}
 
@@ -43,7 +47,12 @@ export function parseResult(raw: string, fallbackMode: VoiceMode): VoiceResult {
 	const title = typeof obj.title === "string" ? obj.title : undefined;
 
 	if (!content.trim()) {
-		throw new Error("模型返回的正文是空的，没有可写入的内容。换个说法再试一次。");
+		throw new Error(
+			F.line(
+				"模型返回的正文是空的，没有可写入的内容。换个说法再试一次。",
+				"The model returned an empty body, so there is nothing to write. Try wording it differently."
+			)
+		);
 	}
 
 	return {
@@ -58,24 +67,23 @@ export function parseResult(raw: string, fallbackMode: VoiceMode): VoiceResult {
 export function describeResult(res: VoiceResult, ctx: VoiceContext): string {
 	switch (res.action) {
 		case "append":
-			return `追加 ${res.content.length} 字到「${ctx.file?.basename ?? "当前笔记"}」末尾`;
+			return F.appended(res.content.length, ctx.file?.basename ?? F.fallbackNote());
 		case "replace-note":
-			return `用 ${res.content.length} 字替换「${ctx.file?.basename ?? "当前笔记"}」整篇正文`;
+			return F.rewritten(res.content.length, ctx.file?.basename ?? F.fallbackNote());
 		case "replace-selection":
-			return `用 ${res.content.length} 字替换选中的 ${
-				ctx.selection.length
-			} 字`;
+			return F.replacedSel(res.content.length, ctx.selection.length);
 		case "create-note":
-			return `新建笔记「${res.title ?? "未命名"}」（${res.content.length} 字）`;
+			return F.created(res.title ?? F.untitled(), res.content.length);
 	}
 }
 
 function extractFrontmatter(data: string): string | null {
-	if (!data.startsWith("---")) return null;
-	const end = data.indexOf("\n---", 3);
+	const source: string = data;
+	if (!source.startsWith("---")) return null;
+	const end: number = source.indexOf("\n---", 3);
 	if (end === -1) return null;
-	const after = data.indexOf("\n", end + 4);
-	const fm = after === -1 ? data : data.slice(0, after);
+	const after: number = source.indexOf("\n", end + 4);
+	const fm: string = after === -1 ? source : source.slice(0, after);
 	return fm.trimEnd();
 }
 
@@ -116,7 +124,7 @@ async function uniquePath(app: App, basePath: string): Promise<string> {
 		const candidate = `${stem} ${i}.md`;
 		if (!app.vault.getAbstractFileByPath(candidate)) return candidate;
 	}
-	throw new Error("同名的笔记太多了，换一个标题再试。");
+	throw new Error(F.tooManySame());
 }
 
 /**
@@ -130,16 +138,16 @@ export async function writeResult(plugin: DeepSeekVoicePlugin, ctx: VoiceContext
 	if (res.action === "replace-selection") {
 		const view = app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view || !ctx.file || view.file?.path !== ctx.file.path) {
-			throw new Error("原笔记已经不在编辑状态，无法精确替换选中段落。请重新打开笔记、重新选中后再试。");
+			throw new Error(F.noEditor());
 		}
 		const editor = view.editor;
-		if (!ctx.from || !ctx.to) throw new Error("没有拿到选中范围，请重新选中文字再试。");
+		if (!ctx.from || !ctx.to) throw new Error(F.noSelectionRange());
 		const current = editor.getRange(ctx.from, ctx.to);
 		if (current !== ctx.selection) {
-			throw new Error("选中的文字在等待期间被改动了，为避免覆盖错误内容，请重新选中再试。");
+			throw new Error(F.selectionChanged());
 		}
 		editor.replaceRange(content, ctx.from, ctx.to);
-		return `已替换选中段落（${content.length} 字）`;
+		return F.selDone(content.length);
 	}
 
 	if (res.action === "create-note") {
@@ -160,18 +168,18 @@ export async function writeResult(plugin: DeepSeekVoicePlugin, ctx: VoiceContext
 			.join("\n");
 		const file = await app.vault.create(path, `${frontmatter}${content}\n`);
 		await app.workspace.getLeaf(false).openFile(file);
-		return `已新建「${file.basename}」`;
+		return F.createdNote(file.basename);
 	}
 
 	const file = ctx.file;
-	if (!file) throw new Error("当前没有打开的笔记，请选择「新建笔记」或先打开一篇笔记。");
+	if (!file) throw new Error(s("errNoNote"));
 
 	if (res.action === "append") {
 		await app.vault.process(file, (data) => {
 			const body = data.replace(/\s+$/, "");
 			return `${body ? `${body}\n\n` : ""}${content}\n`;
 		});
-		return `已追加到「${file.basename}」`;
+		return F.appendDone(file.basename);
 	}
 
 	// replace-note
@@ -180,7 +188,7 @@ export async function writeResult(plugin: DeepSeekVoicePlugin, ctx: VoiceContext
 		const keepsFrontmatter = fm && !content.startsWith("---");
 		return `${keepsFrontmatter ? `${fm}\n\n` : ""}${content}\n`;
 	});
-	return `已改写「${file.basename}」正文`;
+	return F.rewriteDone(content.length, file.basename);
 }
 
 export function notify(message: string, timeout = 4000): void {
@@ -190,6 +198,6 @@ export function notify(message: string, timeout = 4000): void {
 export function guardFileSize(file: TFile | null): void {
 	if (!file) return;
 	if (file.stat.size > 800_000) {
-		throw new Error("这篇笔记太大（超过 800 KB），为避免误覆盖，插件拒绝整篇改写。请用「追加」或先拆分笔记。");
+		throw new Error(F.fileTooBig());
 	}
 }

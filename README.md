@@ -35,6 +35,39 @@ Type or dictate an instruction in plain language:
 
 The agent has nine tools: search notes, list folders, read a note, web search, read a URL, write a note, create a folder, move/rename, and (off by default) move to trash.
 
+**Photos**
+
+Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on iOS and Android that is the real camera. The shot is resized to 1400 px and sent to the model, so "photograph this page / this prescription / this whiteboard and turn it into a note" works in one step. Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
+
+## Status: what works, what doesn't (0.6.0)
+
+Written down honestly, because a marketplace listing that over-promises is worse than a short one.
+
+**Works today, on iPhone and Android as well as desktop**
+
+- Voice → note, all four modes, with a preview before anything is written.
+- DeepSeek speech-to-text inside the dialog (120 s per clip), or the system keyboard's dictation.
+- One-tap entry from the phone: a floating button that follows you across the app, Back Tap, lock-screen widget, action button, or a Shortcuts automation.
+- English and Chinese interface, following the app language (and overridable per plugin).
+- Agent mode: search the vault, read notes, list folders, web search, read a link, then create / append / overwrite notes, create folders, move and rename — with a confirmation queue in front of every write.
+- Photos: camera or photo library, up to 4 per message, downscaled before upload.
+- Nine tools, 8 steps by default (cap 24), 24 queued writes per run, 200k characters per write.
+- When the step budget or the 8-minute wall clock runs out, **Keep going** resumes the same conversation instead of starting over.
+- The confirmation queue is written to disk, so a phone that kills the app does not throw away ten prepared edits.
+- Cache-aware prompts: the system prompt and tool schema stay byte-identical between runs, the document you are editing sits in its own stable message, and repeated reads in one run are answered from what the model already has. Each answer reports the hit rate and what it cost.
+- Settings show a running tally: requests, cache hit rate of all input, money spent, money saved.
+- Frontmatter preserved on rewrite; notes over 800 KB refused instead of truncated.
+- Rebuilt against the official `eslint-plugin-obsidianmd` ruleset: 0 errors.
+
+**Not built yet**
+
+- **No background work.** Nothing runs while Obsidian is closed. iOS will not wake the app on a schedule, so "every morning at 8" has to be an iOS Shortcuts automation that opens the URI.
+- **No email inbox.** Gmail needs OAuth and raw sockets; the Obsidian WebView gives neither. The workaround is forwarding mail into a note or an RSS-to-note service, then running *read links in this note*.
+- **No streaming.** The answer arrives in one piece.
+- **No chat history / memory.** Each instruction starts clean; the dialog stays open so you can issue the next one, but nothing is remembered between runs.
+- **No semantic search.** Keyword search over filenames and body text — no embeddings.
+- **No custom prompt per tool.** One system prompt, one extra-requirements box.
+
 ## How it compares
 
 Prices as listed by each vendor in November 2026, for one person. This table is about *fit*, not about which model is smartest.
@@ -59,7 +92,7 @@ Let's not pretend this is the first agent plugin. The community list already has
 ### Where it is weaker
 
 - The model is cheaper, and it shows on long, subtle rewrites. Switch to `deepseek-v4-pro` in settings for those.
-- The interface is Chinese-first today. English UI strings are on the roadmap.
+- Both interfaces exist (English and Chinese), but the English wording is a translation of Chinese-first copy — some sentences still read that way.
 - No embeddings, no semantic search, no chat sidebar with memory. It is an action tool, not a second brain.
 
 ## What it actually costs
@@ -68,6 +101,7 @@ Real DeepSeek list prices (November 2026, **off-peak**; peak hours are 2×):
 
 | Item | Price |
 | --- | --- |
+| Input, cache **hit** | $0.003 / 1M tokens |
 | Input, cache miss | $0.15 / 1M tokens |
 | Output | $0.60 / 1M tokens |
 | Web search | $0.75 / 1,000 searches |
@@ -86,7 +120,36 @@ Worked examples, assuming a ~3,000-token note context and a ~700-token answer:
 
 For comparison, that year is about **one month** of ChatGPT Plus, Google AI Pro, or Notion Business, and about **one sixth** of Copilot Plus annual.
 
+### Cache hits are where the cheap comes from
+
+DeepSeek bills a cached input token at **$0.003 / 1M** instead of $0.15 — fifty times cheaper — but only when a request *fully* matches a cached prefix unit. That has a direct consequence for how a client should be built, and this plugin follows it:
+
+- The system prompt and the tool schema never contain the current note name, the time, or a random id. Variable context (which note is open, how many actions are queued) rides in the user message instead, so everything before it stays byte-identical and can be reused across notes and across days.
+- Agent history is append-only, and *Keep going* reuses the exact same message list, so a 20-step task pays full price for its first turn and cache price for the other nineteen.
+- Tool schemas are emitted in a fixed order, because they sit in the prefix too.
+- The document you are editing gets its own user message, with your instruction in the one after it. Rewriting the same note three times (append, then tighten, then add a line) hits cache on the document from the second time on, because only the trailing instruction block changed.
+- In agent mode, reading the same note twice in one run returns a pointer to the earlier result instead of the text again, and tool output is capped at 9k characters with the tail kept — a tool result is re-sent on every later step, so its length multiplies by the step count.
+- Every answer shows `Cache 91% · 8.2k reused + 780 new · ≈$0.0011 · saved $0.0011`, so you can see the effect rather than trust it. Settings keeps a running total, including a reset button.
+
+What to expect, measured rather than promised:
+
+| Situation | Input on cache |
+| --- | --- |
+| First call after the cache expired (hours of idle, or right after changing the model / the web-search toggle — both alter the prefix) | 0% |
+| Single short question, prefix still warm | 90–96% |
+| Agent task of 4–6 steps | 85–93% of all input tokens |
+| Rewriting a note for the first time (the document is new text no cache can contain) | 10–25%, i.e. just the system prompt |
+| Rewriting the same note a second time | 85–95% |
+
+The ceiling is structural: the prefix is the system prompt plus the tool schema (~2.4k tokens); everything after it is content the model has not seen. So a hit rate near 100% is not a thing, and any plugin claiming it is measuring something else. The dialog shows the real number per call and settings keeps the running total.
+
+The first request after a cache eviction is always a miss; DeepSeek keeps caches for hours to days, best-effort.
+
 Caveats, because they matter: those numbers assume Flash and off-peak. Long documents, `deepseek-v4-pro`, or letting the agent read ten pages per request will multiply them. There is no free tier — you top up DeepSeek and pay per use, which is exactly why there is no subscription here.
+
+## Interface
+
+The dialogs are built from your theme's own variables — no gradients, no glow, no floating cards with hand-picked purple accents, so it looks like Obsidian rather than a chat app bolted on. One accent colour, one hairline, one grey surface; hierarchy comes from spacing and type size. Dark and light both follow whatever theme you run, including community themes.
 
 ## Install
 
@@ -116,6 +179,8 @@ Defaults are already correct: `https://api.deepseek.com`, model `deepseek-flash`
 ## Using it on the phone
 
 The iOS volume buttons are not available to third-party apps, so pick one of these:
+
+**Floating button** — a round button floats over the app on phones and tablets. Tap it for an AI instruction, long-press for a voice note, drag it out of the way. Toggle it under *Floating button on mobile* in settings.
 
 **Back Tap** — Settings → Accessibility → Touch → Back Tap → Double Tap → your shortcut. The shortcut needs exactly one action, **Open URL**:
 

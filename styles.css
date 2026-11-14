@@ -1,30 +1,53 @@
-/* DeepSeek Vault Agent —— 复用 Obsidian 主题变量，深色/浅色都跟着主题走 */
+/* DeepSeek Vault Agent
+ *
+ * 设计取向：安静、像笔记应用本身的一部分。
+ * - 不堆渐变、不发光、不用药丸状的彩色大按钮：这些一眼就是「AI 产品」。
+ * - 颜色全部来自 Obsidian 主题变量，跟随用户自己选的主题，深色浅色都不用另写一套。
+ * - 只用一条 1px 细线、一档灰底、一个强调色，靠间距和字号层级来分层次。
+ */
+
+.dsv-modal {
+	--dsv-radius: 12px;
+	--dsv-radius-s: 8px;
+	--dsv-line: var(--background-modifier-border);
+	--dsv-surface: var(--background-secondary);
+	--dsv-accent-soft: rgba(var(--interactive-accent-rgb), 0.12);
+	--dsv-accent-line: rgba(var(--interactive-accent-rgb), 0.45);
+	--dsv-gap: 14px;
+}
 
 .dsv-modal .modal-content,
 .dsv-content {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: var(--dsv-gap);
 }
 
+/* —— 抬头 —— */
 .dsv-head {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 3px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--dsv-line, var(--background-modifier-border));
 }
 
 .dsv-title {
-	font-size: 1.05em;
+	font-size: 1.06em;
 	font-weight: 600;
+	letter-spacing: -0.01em;
 	color: var(--text-normal);
+	line-height: 1.35;
 }
 
 .dsv-sub {
-	font-size: 0.78em;
+	font-size: 0.76em;
 	color: var(--text-muted);
 	word-break: break-all;
+	line-height: 1.5;
 }
 
+/* —— 落点选择：像标签，不像开关 —— */
 .dsv-chips {
 	display: flex;
 	flex-wrap: wrap;
@@ -32,65 +55,179 @@
 }
 
 .dsv-chip {
-	padding: 6px 12px;
+	padding: 5px 12px;
 	border-radius: 999px;
-	border: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
+	background: transparent;
 	color: var(--text-muted);
-	font-size: 0.85em;
+	font-size: 0.83em;
+	line-height: 1.5;
+	box-shadow: none;
 	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .dsv-chip:hover {
+	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 
 .dsv-chip.is-active {
-	background: var(--interactive-accent);
-	border-color: var(--interactive-accent);
-	color: var(--text-on-accent);
-	font-weight: 600;
+	background: var(--dsv-accent-soft);
+	border-color: var(--dsv-accent-line);
+	color: var(--interactive-accent);
+	font-weight: 500;
 }
 
 .dsv-chip.is-disabled {
-	opacity: 0.4;
+	opacity: 0.38;
+	cursor: default;
 }
 
+/* —— 输入 —— */
 .dsv-input {
 	width: 100%;
-	min-height: 96px;
+	min-height: 92px;
 	max-height: 260px;
 	resize: none;
-	padding: 10px 12px;
-	border-radius: var(--radius-m, 8px);
-	border: 1px solid var(--background-modifier-border);
+	padding: 12px 14px;
+	border-radius: var(--dsv-radius);
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
 	background: var(--background-primary);
 	color: var(--text-normal);
 	font-family: var(--font-text);
-	font-size: 16px; /* iOS 上低于 16px 会自动放大页面 */
-	line-height: 1.5;
+	font-size: 16px; /* iOS 上低于 16px 会把整个页面放大 */
+	line-height: 1.6;
+	box-shadow: none;
+	transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.dsv-input:focus {
+.dsv-input::placeholder {
+	color: var(--text-faint);
+}
+
+.dsv-input:focus,
+.dsv-input:focus-visible {
 	outline: none;
-	border-color: var(--interactive-accent);
+	border-color: var(--dsv-accent-line);
+	box-shadow: 0 0 0 3px var(--dsv-accent-soft);
 }
 
 .dsv-hint {
-	font-size: 0.76em;
+	font-size: 0.75em;
 	color: var(--text-faint);
-	line-height: 1.5;
+	line-height: 1.6;
 }
 
+/* —— 底部按钮区 —— */
 .dsv-footer {
 	display: flex;
+	align-items: center;
 	justify-content: flex-end;
 	gap: 8px;
+	padding-top: 4px;
 }
 
 .dsv-footer button {
-	min-width: 88px;
-	min-height: 40px; /* 手指能按到 */
+	min-height: 40px;
+	border-radius: var(--dsv-radius-s);
+}
+
+.dsv-btn-quiet {
+	background: transparent;
+	border: 1px solid transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+.dsv-btn-quiet:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.dsv-btn-main {
+	font-weight: 500;
+	min-width: 112px;
+}
+
+/* —— 录音：一条静态的横条，不画虚线框 —— */
+.dsv-rec {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.dsv-recbtn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	border-radius: var(--dsv-radius);
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
+	background: var(--dsv-surface);
+	color: var(--text-normal);
+	font-size: 0.92em;
+	box-shadow: none;
+	cursor: pointer;
+	transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.dsv-recbtn::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--text-faint);
+	flex: 0 0 auto;
+	transition: background-color 160ms ease;
+}
+
+.dsv-recbtn:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.dsv-recbtn.is-recording {
+	border-color: rgba(var(--color-red-rgb, 214, 69, 69), 0.55);
+	background: rgba(var(--color-red-rgb, 214, 69, 69), 0.08);
+	color: var(--text-error);
+	font-weight: 500;
+}
+
+.dsv-recbtn.is-recording::before {
+	background: var(--text-error);
+	animation: dsv-pulse 1.4s ease-in-out infinite;
+}
+
+.dsv-recbtn:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+@keyframes dsv-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.35;
+		transform: scale(0.82);
+	}
+}
+
+.dsv-rechint {
+	font-size: 0.73em;
+	color: var(--text-faint);
+	line-height: 1.55;
+}
+
+/* —— 结果区 —— */
+.dsv-result {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
 }
 
 .dsv-result:empty {
@@ -98,57 +235,68 @@
 }
 
 .dsv-summary {
-	padding: 8px 10px;
-	border-radius: var(--radius-m, 8px);
-	background: var(--background-secondary);
+	padding: 10px 12px;
+	border-radius: var(--dsv-radius-s);
+	background: var(--dsv-surface);
 	color: var(--text-normal);
 	font-size: 0.86em;
 	white-space: pre-wrap;
-	line-height: 1.6;
+	line-height: 1.65;
 }
 
 .dsv-notes {
-	font-size: 0.8em;
+	font-size: 0.79em;
 	color: var(--text-warning, var(--text-muted));
 	white-space: pre-wrap;
-	line-height: 1.5;
+	line-height: 1.6;
+	padding-left: 10px;
+	border-left: 2px solid var(--dsv-line, var(--background-modifier-border));
 }
 
 .dsv-error {
-	padding: 8px 10px;
-	border-radius: var(--radius-m, 8px);
+	padding: 10px 12px;
+	border-radius: var(--dsv-radius-s);
 	background: var(--background-modifier-error);
 	color: var(--text-error);
 	font-size: 0.85em;
-	line-height: 1.6;
+	line-height: 1.65;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 10px;
 	align-items: flex-start;
 }
 
+.dsv-error button {
+	min-height: 34px;
+}
+
 .dsv-preview {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m, 8px);
-	padding: 6px 10px;
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
+	border-radius: var(--dsv-radius-s);
+	padding: 8px 12px;
 }
 
 .dsv-preview summary {
 	cursor: pointer;
-	font-size: 0.82em;
+	font-size: 0.81em;
 	color: var(--text-muted);
+}
+
+.dsv-preview summary:hover {
+	color: var(--text-normal);
 }
 
 .dsv-pre {
 	max-height: 240px;
 	overflow: auto;
 	margin: 8px 0 4px;
-	padding: 8px;
-	border-radius: 6px;
+	padding: 10px 12px;
+	border-radius: var(--dsv-radius-s);
 	background: var(--background-primary-alt, var(--background-secondary));
 	color: var(--text-normal);
+	font-family: var(--font-text);
 	font-size: 0.82em;
-	line-height: 1.55;
+	line-height: 1.65;
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -156,18 +304,345 @@
 .dsv-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 8px;
 }
 
 .dsv-actions button {
 	min-height: 38px;
+	border-radius: var(--dsv-radius-s);
 }
 
 .dsv-modal.is-busy .dsv-input {
-	opacity: 0.7;
+	opacity: 0.65;
 }
 
-/* 手机：铺满屏幕，按钮留在拇指区 */
+/* —— AI 指令：模型说的话，像一段引用 __ */
+.dsv-reply {
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.7;
+	font-size: 0.92em;
+	background: var(--dsv-surface);
+	border-radius: var(--dsv-radius);
+	padding: 14px 16px;
+}
+
+/* —— 执行过程：细轨画在容器里，圆点压在上面，不会被滚动裁掉 —— */
+.dsv-steps-head {
+	font-size: 0.75em;
+	font-weight: 500;
+	color: var(--text-faint);
+}
+
+.dsv-steps-head:empty {
+	display: none;
+}
+
+.dsv-steps {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	max-height: 176px;
+	overflow-y: auto;
+	padding-left: 16px;
+}
+
+.dsv-steps::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 8px;
+	bottom: 8px;
+	width: 1px;
+	background: var(--dsv-line, var(--background-modifier-border));
+}
+
+.dsv-steps:empty {
+	display: none;
+}
+
+.dsv-step {
+	position: relative;
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	line-height: 1.6;
+	padding: 3px 0;
+}
+
+.dsv-step-dot {
+	position: absolute;
+	left: -15px;
+	top: 8px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--text-faint);
+	box-shadow: 0 0 0 3px var(--background-primary);
+}
+
+.dsv-step:last-child .dsv-step-dot {
+	background: var(--interactive-accent);
+}
+
+.dsv-step.is-error .dsv-step-dot {
+	background: var(--text-error);
+}
+
+.dsv-step.is-error .dsv-step-text {
+	color: var(--text-error);
+}
+
+/* —— 待确认的写操作：一份清单，不是一堆标签 —— */
+.dsv-ops {
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
+	border-radius: var(--dsv-radius);
+	padding: 4px 14px 6px;
+	display: flex;
+	flex-direction: column;
+}
+
+.dsv-ops-title {
+	font-size: 0.76em;
+	font-weight: 500;
+	color: var(--text-faint);
+	padding: 8px 0 6px;
+	border-bottom: 1px solid var(--dsv-line, var(--background-modifier-border));
+	margin-bottom: 2px;
+}
+
+.dsv-op {
+	position: relative;
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	font-size: 0.83em;
+	line-height: 1.6;
+	padding: 6px 0 6px 12px;
+	word-break: break-word;
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.dsv-op:last-child {
+	border-bottom: none;
+}
+
+.dsv-op-dot {
+	position: absolute;
+	left: 0;
+	top: 13px;
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+
+.dsv-op.is-write .dsv-op-dot {
+	background: var(--interactive-accent);
+}
+
+.dsv-op.is-folder .dsv-op-dot {
+	background: var(--text-muted);
+}
+
+.dsv-op.is-move .dsv-op-dot {
+	background: var(--text-warning, var(--text-muted));
+}
+
+.dsv-op.is-delete .dsv-op-dot {
+	background: var(--text-error);
+}
+
+.dsv-op-text {
+	color: var(--text-normal);
+}
+
+/* 结果出现时轻轻浮一下，别做成弹窗动画 */
+@keyframes dsv-fade {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.dsv-reply,
+.dsv-ops,
+.dsv-error {
+	animation: dsv-fade 180ms ease-out both;
+}
+
+/* —— 缓存与花费：一行小字，上面一条细线 —— */
+.dsv-usage {
+	margin-top: 2px;
+	padding-top: 8px;
+	border-top: 1px solid var(--dsv-line, var(--background-modifier-border));
+	font-size: 0.73em;
+	color: var(--text-faint);
+	line-height: 1.6;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.01em;
+}
+
+/* —— 拍照 / 相册 —— */
+.dsv-shots {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.dsv-shot-bar {
+	display: flex;
+	gap: 8px;
+}
+
+.dsv-shot-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 30px;
+	padding: 4px 8px 4px 4px;
+	border-radius: var(--dsv-radius-s);
+	border: none;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 0.82em;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.dsv-shot-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.dsv-shot-btn .svg-icon {
+	width: 15px;
+	height: 15px;
+}
+
+.dsv-shot-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.dsv-shot-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.dsv-shot-list.is-empty {
+	display: none;
+}
+
+.dsv-shot {
+	position: relative;
+	width: 64px;
+	height: 64px;
+	border-radius: var(--dsv-radius-s);
+	overflow: hidden;
+	border: 1px solid var(--dsv-line, var(--background-modifier-border));
+}
+
+.dsv-shot-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.dsv-shot-x {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 22px;
+	height: 22px;
+	min-height: 22px;
+	padding: 0;
+	line-height: 20px;
+	border: none;
+	border-radius: 0 0 0 8px;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	font-size: 14px;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+/* 真正接文件的 input：藏在视口外，但必须挂在 DOM 上，iOS 才会弹系统相机 */
+.dsv-file-input {
+	position: fixed;
+	left: -9999px;
+	top: 0;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* —— 手机上的悬浮按钮：实心、一圈边、没有光晕 —— */
+.dsv-fab {
+	position: fixed;
+	z-index: 40;
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.18),
+		0 6px 18px rgba(0, 0, 0, 0.22);
+	opacity: 0.95;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-tap-highlight-color: transparent;
+	transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.dsv-fab:active {
+	opacity: 1;
+	transform: scale(0.93);
+}
+
+.dsv-fab svg {
+	width: 23px;
+	height: 23px;
+}
+
+/* —— 设置页 —— */
+.dsv-settings-help {
+	margin-top: 22px;
+	padding-top: 14px;
+	border-top: 1px solid var(--dsv-line, var(--background-modifier-border));
+	font-size: 0.85em;
+	color: var(--text-muted);
+	line-height: 1.7;
+}
+
+.dsv-settings-help h3 {
+	font-size: 0.92em;
+	font-weight: 600;
+	color: var(--text-normal);
+	margin: 0 0 8px;
+}
+
+.dsv-stats-empty .setting-item-description {
+	opacity: 0.85;
+}
+
+/* —— 手机：铺满屏，按钮留在拇指够得到的地方 —— */
 .is-mobile .dsv-modal {
 	width: 100%;
 	max-width: 100%;
@@ -178,133 +653,62 @@
 }
 
 .is-mobile .dsv-modal .modal-content {
-	padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+	padding: 14px 16px calc(12px + env(safe-area-inset-bottom));
 	height: 100%;
+}
+
+.is-mobile .dsv-content {
+	gap: 12px;
+}
+
+.is-mobile .dsv-footer {
+	position: sticky;
+	bottom: 0;
+	margin-top: auto;
+	padding-top: 10px;
+	padding-bottom: calc(4px + env(safe-area-inset-bottom));
+	background: var(--background-primary);
+	border-top: 1px solid var(--dsv-line, var(--background-modifier-border));
 }
 
 .is-mobile .dsv-footer button {
 	flex: 1;
 	min-height: 46px;
-	font-size: 1em;
-}
-
-.dsv-settings-help {
-	margin-top: 18px;
-	padding-top: 12px;
-	border-top: 1px solid var(--background-modifier-border);
-	font-size: 0.86em;
-	color: var(--text-muted);
-	line-height: 1.65;
-}
-
-.dsv-settings-help h3 {
 	font-size: 0.95em;
-	color: var(--text-normal);
-	margin-bottom: 6px;
 }
 
-/* 录音条 */
-.dsv-rec {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
+.is-mobile .dsv-shot-btn {
+	min-height: 40px;
+	font-size: 0.9em;
 }
 
-.dsv-recbtn {
-	width: 100%;
-	min-height: 46px;
-	border-radius: var(--radius-m, 8px);
-	border: 1px dashed var(--background-modifier-border);
-	background: var(--background-secondary);
-	color: var(--text-normal);
-	font-size: 0.95em;
-	cursor: pointer;
+.is-mobile .dsv-shot {
+	width: 74px;
+	height: 74px;
 }
 
-.dsv-recbtn:hover {
-	border-color: var(--interactive-accent);
+.is-mobile .dsv-actions button {
+	flex: 1;
+	min-height: 44px;
 }
 
-.dsv-recbtn.is-recording {
-	border-style: solid;
-	border-color: var(--text-error);
-	color: var(--text-error);
-	background: rgba(214, 69, 69, 0.12);
-	font-weight: 600;
-}
+/* 关掉动画的用户就别给他脉冲 */
+@media (prefers-reduced-motion: reduce) {
+	.dsv-fab,
+	.dsv-chip,
+	.dsv-input,
+	.dsv-recbtn,
+	.dsv-shot-btn {
+		transition: none;
+	}
 
-.dsv-recbtn:disabled {
-	opacity: 0.6;
-}
+	.dsv-recbtn.is-recording::before {
+		animation: none;
+	}
 
-.dsv-rechint {
-	font-size: 0.74em;
-	color: var(--text-faint);
-	line-height: 1.45;
-}
-
-/* AI 指令：执行过程与结果 */
-.dsv-steps {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	max-height: 180px;
-	overflow-y: auto;
-	margin-top: 2px;
-}
-
-.dsv-step {
-	display: flex;
-	gap: 6px;
-	align-items: flex-start;
-	font-size: 0.8em;
-	color: var(--text-muted);
-	line-height: 1.5;
-}
-
-.dsv-step-icon {
-	flex: 0 0 auto;
-	color: var(--interactive-accent);
-	font-weight: 700;
-}
-
-.dsv-step.is-error .dsv-step-icon,
-.dsv-step.is-error .dsv-step-text {
-	color: var(--text-error);
-}
-
-.dsv-step-text {
-	word-break: break-word;
-}
-
-.dsv-reply {
-	white-space: pre-wrap;
-	word-break: break-word;
-	line-height: 1.6;
-	font-size: 0.92em;
-	background: var(--background-secondary);
-	border-radius: var(--radius-m, 8px);
-	padding: 10px 12px;
-}
-
-.dsv-ops {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m, 8px);
-	padding: 8px 10px;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.dsv-ops-title {
-	font-size: 0.8em;
-	font-weight: 600;
-	color: var(--text-muted);
-	margin-bottom: 2px;
-}
-
-.dsv-op {
-	font-size: 0.84em;
-	line-height: 1.5;
-	word-break: break-word;
+	.dsv-reply,
+	.dsv-ops,
+	.dsv-error {
+		animation: none;
+	}
 }

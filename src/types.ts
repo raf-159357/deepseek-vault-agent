@@ -1,4 +1,11 @@
 import type { EditorPosition, TFile } from "obsidian";
+import type { Usage } from "./usage";
+
+/** 单次运行的步数硬上限（设置里的滑块也以此为最大值） */
+export const AGENT_STEP_LIMIT = 24;
+
+/** 一条消息最多带几张图 */
+export const MAX_IMAGES = 4;
 
 /** 语音指令的落点：追加 / 改写选中 / 改写全文 / 新建笔记 */
 export type VoiceMode = "append" | "replace-selection" | "replace-note" | "create-note";
@@ -26,9 +33,16 @@ export interface VoiceResult {
 	notes?: string;
 }
 
+/** OpenAI 兼容的多段内容：文字或图片（图片走 data URL 或公网地址） */
+export type ContentPart =
+	| { type: "text"; text: string }
+	| { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+
+export type MessageContent = string | ContentPart[];
+
 export interface ChatMessage {
 	role: "system" | "user" | "assistant";
-	content: string;
+	content: MessageContent;
 }
 
 /** 模型请求调用的函数（OpenAI 兼容格式） */
@@ -40,7 +54,7 @@ export interface ToolCall {
 
 /** Agent 对话里的一条消息，比 ChatMessage 多出 tool 角色 */
 export type AgentMessage =
-	| { role: "system" | "user"; content: string }
+	| { role: "system" | "user"; content: MessageContent }
 	| { role: "assistant"; content: string; tool_calls?: ToolCall[] }
 	| { role: "tool"; content: string; tool_call_id: string };
 
@@ -58,8 +72,39 @@ export interface AgentStep {
 	ok: boolean;
 }
 
+/** 停下来时的原因：正常答完 / 步数用完 / 到时间上限（都可以「继续跑」） */
+export type StopReason = "done" | "steps" | "time";
+
+/** 一次任务的完整状态，留着它就能接着往下跑（手机上 App 被杀也不至于全丢） */
+export interface AgentState {
+	messages: AgentMessage[];
+	pending: PendingOp[];
+	steps: AgentStep[];
+	/** 原任务带了图片时，续跑仍按多模态发（图片已在 messages 里，这里只记标志） */
+	hasImages: boolean;
+	/** 累计用量，续跑时继续累加 */
+	usage: Usage;
+	/** 本次运行里已经调用过的只读工具指纹，重复调用直接复用，不再花一次 token */
+	seen?: Set<string>;
+}
+
+/** 从相机或相册拿到、已经压好尺寸的图片 */
+export interface PickedImage {
+	dataUrl: string;
+	name: string;
+	bytes: number;
+	width: number;
+	height: number;
+}
+
 export interface AgentRunResult {
 	reply: string;
 	steps: AgentStep[];
 	pending: PendingOp[];
+	stopped: StopReason;
+	state: AgentState;
+	/** 本次累计用量（含缓存命中） */
+	usage: Usage;
+	/** 实际使用的模型（带图时可能临时换成 flash） */
+	model: string;
 }

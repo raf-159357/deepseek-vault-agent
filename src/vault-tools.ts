@@ -1,3 +1,4 @@
+import { F } from "./i18n";
 import { App, TFile, TFolder, normalizePath } from "obsidian";
 import type { PendingOp } from "./types";
 
@@ -11,19 +12,19 @@ const MAX_WRITE_CHARS = 200_000;
  */
 export function safePath(raw: string): string {
 	let p = String(raw ?? "").trim();
-	if (!p) throw new Error("路径是空的。");
+	if (!p) throw new Error(F.emptyPath());
 	p = p.replace(/\\/g, "/").replace(/^\.\//, "");
-	if (p.startsWith("/") || /^[a-zA-Z]:/.test(p)) throw new Error(`只能用库内相对路径，不能是「${raw}」。`);
-	if (p.split("/").some((seg) => seg === "..")) throw new Error(`路径里不能有「..」，拒绝越出库目录：${raw}`);
+	if (p.startsWith("/") || /^[a-zA-Z]:/.test(p)) throw new Error(F.notRelative(raw));
+	if (p.split("/").some((seg) => seg === "..")) throw new Error(F.dotdot(raw));
 
 	p = normalizePath(p);
 	const lower = p.toLowerCase();
 	for (const bad of FORBIDDEN_SEGMENTS) {
 		if (lower === bad || lower.startsWith(`${bad}/`) || lower.includes(`/${bad}/`) || lower.endsWith(`/${bad}`)) {
-			throw new Error(`不允许操作配置目录「${bad}」：${raw}`);
+			throw new Error(F.configDir(bad, raw));
 		}
 	}
-	if (p.split("/").some((seg) => seg.startsWith("."))) throw new Error(`不允许操作隐藏文件或目录：${raw}`);
+	if (p.split("/").some((seg) => seg.startsWith("."))) throw new Error(F.hidden(raw));
 	return p;
 }
 
@@ -41,7 +42,7 @@ async function ensureFolder(app: App, folder: string): Promise<void> {
 	const path = normalizePath(folder);
 	const existing = app.vault.getAbstractFileByPath(path);
 	if (existing instanceof TFolder) return;
-	if (existing) throw new Error(`「${path}」是一个文件，不能当文件夹用。`);
+	if (existing) throw new Error(F.isFile(path));
 	await app.vault.createFolder(path);
 }
 
@@ -56,8 +57,8 @@ export function listFolder(app: App, folder: string, limit = 80): { folders: str
 	const raw = String(folder ?? "").trim();
 	const path = raw ? safePath(raw) : "";
 	const target = path ? app.vault.getAbstractFileByPath(path) : app.vault.getRoot();
-	if (!target) throw new Error(`找不到文件夹：${raw}`);
-	if (!(target instanceof TFolder)) throw new Error(`「${raw}」是一个文件，不是文件夹。`);
+	if (!target) throw new Error(F.noFolder(raw));
+	if (!(target instanceof TFolder)) throw new Error(F.notFolder(raw));
 
 	const folders: string[] = [];
 	const notes: NoteInfo[] = [];
@@ -74,7 +75,7 @@ export function listFolder(app: App, folder: string, limit = 80): { folders: str
 export async function readNote(app: App, rawPath: string, maxChars = 20_000): Promise<{ path: string; content: string }> {
 	const path = safePath(asMarkdownPath(rawPath));
 	const file = app.vault.getAbstractFileByPath(path);
-	if (!(file instanceof TFile)) throw new Error(`没有这篇笔记：${path}`);
+	if (!(file instanceof TFile)) throw new Error(F.noNote(path));
 	const content = await app.vault.cachedRead(file);
 	return {
 		path,
@@ -92,7 +93,7 @@ export interface SearchMatch {
 /** 先按文件名匹配，再按正文匹配；只在 .md 里找，跳过配置目录 */
 export async function searchNotes(app: App, query: string, limit = 20): Promise<SearchMatch[]> {
 	const q = String(query ?? "").trim();
-	if (!q) throw new Error("搜索词是空的。");
+	if (!q) throw new Error(F.emptyQuery());
 	const needle = q.toLowerCase();
 	const out: SearchMatch[] = [];
 
@@ -140,30 +141,26 @@ export function formatMatches(list: SearchMatch[]): string {
 export function describeOp(op: PendingOp): string {
 	switch (op.kind) {
 		case "write": {
-			const label = op.mode === "create" ? "新建" : op.mode === "append" ? "追加" : "覆盖";
-			return `${label}「${op.path}」（${op.content.length} 字）`;
+			const label = op.mode === "create" ? F.opCreate() : op.mode === "append" ? F.opAppend() : F.opOverwrite();
+			return F.opWrite(label, op.path, op.content.length);
 		}
 		case "folder":
-			return `新建文件夹「${op.path}」`;
+			return F.opFolder(op.path);
 		case "move":
-			return `移动「${op.from}」→「${op.to}」`;
+			return F.opMove(op.from, op.to);
 		case "delete":
-			return `移入回收站「${op.path}」`;
+			return F.opTrash(op.path);
 	}
 }
 
 async function trash(app: App, path: string): Promise<void> {
 	const file = app.vault.getAbstractFileByPath(path);
-	if (!file) throw new Error(`找不到「${path}」，可能已经被删了。`);
+	if (!file) throw new Error(F.gone(path));
 	if (!(file instanceof TFile) && !(file instanceof TFolder)) {
-		throw new Error(`「${path}」不是笔记或文件夹。`);
+		throw new Error(F.notNoteOrFolder(path));
 	}
-	const fm = app.fileManager as unknown as { trashFile?: (f: TFile | TFolder) => Promise<void> };
-	if (typeof fm.trashFile === "function") {
-		await fm.trashFile(file);
-		return;
-	}
-	await app.vault.trash(file, true);
+	// 交给 FileManager：它会按用户在 Obsidian 里的偏好决定「系统回收站 / 库内 .trash」。
+	await app.fileManager.trashFile(file);
 }
 
 /**

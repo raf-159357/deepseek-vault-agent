@@ -4,6 +4,8 @@
  * 所以这里直接用 Web Audio 采原始采样，自己写 WAV 头，避免格式转换依赖。
  */
 
+import { F } from "./i18n";
+
 const TARGET_RATE = 16000;
 
 export interface RecorderOptions {
@@ -30,7 +32,7 @@ export class WavRecorder {
 		if (this.recording) return;
 		const media = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
 		if (!media?.getUserMedia) {
-			throw new Error("当前环境没有麦克风接口，请改用键盘上的语音输入。");
+			throw new Error(F.noMic());
 		}
 
 		this.stream = await media.getUserMedia({
@@ -41,7 +43,7 @@ export class WavRecorder {
 		const holder = window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor };
 		const Ctor = holder.AudioContext ?? holder.webkitAudioContext;
 		if (!Ctor) {
-			throw new Error("这个环境不支持 Web Audio，无法录音。请改用键盘上的语音输入。");
+			throw new Error(F.noWebAudio());
 		}
 		this.ctx = new Ctor();
 		if (this.ctx.state === "suspended") await this.ctx.resume();
@@ -75,8 +77,8 @@ export class WavRecorder {
 
 		const merged = merge(this.chunks);
 		this.chunks = [];
-		if (merged.length === 0) throw new Error("没有录到声音，检查一下麦克风权限。");
-		if (seconds < 0.3) throw new Error("录音太短了，说完整一句话再停。");
+		if (merged.length === 0) throw new Error(F.silent());
+		if (seconds < 0.3) throw new Error(F.tooShort());
 
 		const pcm = resample(merged, this.sampleRate, TARGET_RATE);
 		return encodeWav(pcm, TARGET_RATE);

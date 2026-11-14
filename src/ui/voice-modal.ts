@@ -1,21 +1,25 @@
-import { App, EditorPosition, MarkdownView, Modal, Notice, TFile } from "obsidian";
+import { App, EditorPosition, MarkdownView, Modal, Notice, TFile, setIcon } from "obsidian";
 import type DeepSeekVoicePlugin from "../main";
-import { chatCompletion, ApiError, transcribe } from "../deepseek";
+import { ApiError, chatCompletionDetailed, supportsVision, transcribe } from "../deepseek";
 import { buildMessages } from "../prompts";
 import { describeResult, guardFileSize, parseResult, writeResult } from "../apply";
 import { WavRecorder } from "../audio";
-import type { VoiceContext, VoiceMode, VoiceResult } from "../types";
+import { pickImage } from "../image";
+import { estimateCost, isEmptyUsage, savedByCache, type Usage } from "../usage";
+import { F, s } from "../i18n";
+import { MAX_IMAGES } from "../types";
+import type { PickedImage, VoiceContext, VoiceMode, VoiceResult } from "../types";
 
 interface ModeDef {
 	id: VoiceMode;
-	label: string;
+	label: () => string;
 }
 
 const MODES: ModeDef[] = [
-	{ id: "append", label: "追加" },
-	{ id: "replace-note", label: "改写全文" },
-	{ id: "replace-selection", label: "改写选中" },
-	{ id: "create-note", label: "新建笔记" },
+	{ id: "append", label: () => s("vmModeAppend") },
+	{ id: "replace-note", label: () => s("vmModeRewrite") },
+	{ id: "replace-selection", label: () => s("vmModeSelection") },
+	{ id: "create-note", label: () => s("vmModeCreate") },
 ];
 
 const MAX_RECORD_SECONDS = 120;
@@ -47,6 +51,12 @@ export class VoiceModal extends Modal {
 	private recorder: WavRecorder | null = null;
 	private recTimer: number | null = null;
 	private transcribing = false;
+	private images: PickedImage[] = [];
+	private shotBtns: HTMLButtonElement[] = [];
+	private shotsEl: HTMLElement | null = null;
+	private visionHinted = false;
+	private usage: Usage | null = null;
+	private usedModel = "";
 
 	constructor(app: App, plugin: DeepSeekVoicePlugin, ctx: VoiceContext, options: VoiceModalOptions = {}) {
 		super(app);
@@ -69,30 +79,32 @@ export class VoiceModal extends Modal {
 		contentEl.addClass("dsv-content");
 
 		const head = contentEl.createDiv({ cls: "dsv-head" });
-		head.createDiv({ cls: "dsv-title", text: "语音笔记" });
+		head.createDiv({ cls: "dsv-title", text: s("vmTitle") });
 		head.createDiv({
 			cls: "dsv-sub",
-			text: this.ctx.file ? this.ctx.file.path : "当前没有打开的笔记，将新建一篇",
+			text: this.ctx.file ? this.ctx.file.path : s("vmNoNote"),
 		});
 
 		const chips = contentEl.createDiv({ cls: "dsv-chips" });
 		for (const def of MODES) {
-			const chip = chips.createEl("button", { cls: "dsv-chip", text: def.label });
+			const chip = chips.createEl("button", { cls: "dsv-chip", text: def.label() });
 			chip.addEventListener("click", () => this.setMode(def.id));
 			this.chips.set(def.id, chip);
 		}
 
+		this.buildShots(contentEl);
+
 		if (this.plugin.settings.asrEnabled) {
 			const rec = contentEl.createDiv({ cls: "dsv-rec" });
-			this.recBtn = rec.createEl("button", { cls: "dsv-recbtn", text: "● 开始说话" });
+			this.recBtn = rec.createEl("button", { cls: "dsv-recbtn", text: s("vmStart") });
 			this.recBtn.addEventListener("click", () => void this.toggleRecord());
 			this.recHint = rec.createDiv({ cls: "dsv-rechint" });
-			this.recHint.setText(`点一下开始，说完再点一下（最长 ${MAX_RECORD_SECONDS} 秒），文字会先填进下面，确认后再生成。`);
+			this.recHint.setText(F.recHint(MAX_RECORD_SECONDS));
 		}
 
 		this.inputEl = contentEl.createEl("textarea", { cls: "dsv-input" });
 		this.inputEl.rows = 5;
-		this.inputEl.placeholder = "说话或直接输入…";
+		this.inputEl.placeholder = s("vmPlaceholder");
 		this.inputEl.value = this.presetText;
 		this.inputEl.addEventListener("input", () => this.autoGrow());
 		this.inputEl.addEventListener("keydown", (evt: KeyboardEvent) => {
@@ -103,12 +115,12 @@ export class VoiceModal extends Modal {
 		});
 
 		const hint = contentEl.createDiv({ cls: "dsv-hint" });
-		hint.setText("也可以点键盘上的麦克风用系统听写。快捷键 Ctrl/⌘ + Enter");
+		hint.setText(F.kbHint());
 
 		const footer = contentEl.createDiv({ cls: "dsv-footer" });
-		const closeBtn = footer.createEl("button", { text: "关闭" });
+		const closeBtn = footer.createEl("button", { cls: "dsv-btn-quiet", text: s("vmClose") });
 		closeBtn.addEventListener("click", () => this.close());
-		this.goBtn = footer.createEl("button", { cls: "mod-cta", text: "生成" });
+		this.goBtn = footer.createEl("button", { cls: "mod-cta dsv-btn-main", text: s("vmGenerate") });
 		this.goBtn.addEventListener("click", () => void this.submit());
 
 		this.resultEl = contentEl.createDiv({ cls: "dsv-result" });
@@ -134,6 +146,59 @@ export class VoiceModal extends Modal {
 		this.contentEl.empty();
 	}
 
+	/** 拍照 / 相册：拍一页书或处方，直接转成笔记 */
+	private buildShots(parent: HTMLElement): void {
+		const wrap = parent.createDiv({ cls: "dsv-shots" });
+		const bar = wrap.createDiv({ cls: "dsv-shot-bar" });
+		const cam = bar.createEl("button", { cls: "dsv-shot-btn" });
+		setIcon(cam, "camera");
+		cam.createSpan({ cls: "dsv-shot-label", text: s("amCamera") });
+		cam.addEventListener("click", () => void this.addImage(true));
+		const gal = bar.createEl("button", { cls: "dsv-shot-btn" });
+		setIcon(gal, "image");
+		gal.createSpan({ cls: "dsv-shot-label", text: s("amGallery") });
+		gal.addEventListener("click", () => void this.addImage(false));
+		this.shotBtns = [cam, gal];
+		this.shotsEl = wrap.createDiv({ cls: "dsv-shot-list" });
+		this.shotsEl.addClass("is-empty");
+	}
+
+	private async addImage(useCamera: boolean): Promise<void> {
+		if (this.busy) return;
+		if (this.images.length >= MAX_IMAGES) {
+			new Notice(F.imageLimit(MAX_IMAGES), 5000);
+			return;
+		}
+		try {
+			const picked = await pickImage(useCamera);
+			if (!picked) return;
+			this.images.push(picked);
+			this.renderShots();
+			if (!this.visionHinted && !supportsVision(this.plugin.settings.model)) {
+				this.visionHinted = true;
+				new Notice(F.visionSwap(), 7000);
+			}
+		} catch (err) {
+			new Notice(F.imageFail(err instanceof Error ? err.message : String(err)), 8000);
+		}
+	}
+
+	private renderShots(): void {
+		if (!this.shotsEl) return;
+		this.shotsEl.empty();
+		this.shotsEl.toggleClass("is-empty", this.images.length === 0);
+		this.images.forEach((img, index) => {
+			const cell = this.shotsEl?.createDiv({ cls: "dsv-shot" });
+			if (!cell) return;
+			cell.createEl("img", { cls: "dsv-shot-img", attr: { src: img.dataUrl, alt: img.name } });
+			const del = cell.createEl("button", { cls: "dsv-shot-x", text: "×" });
+			del.addEventListener("click", () => {
+				this.images.splice(index, 1);
+				this.renderShots();
+			});
+		});
+	}
+
 	private autoGrow(): void {
 		this.inputEl.setCssProps({ height: `${Math.min(this.inputEl.scrollHeight + 2, 260)}px` });
 	}
@@ -147,8 +212,8 @@ export class VoiceModal extends Modal {
 
 	private setMode(mode: VoiceMode): void {
 		if (!this.canUseMode(mode)) {
-			if (mode === "replace-selection") new Notice("先在这篇笔记里选中一段文字，才能改写选中部分。");
-			else if (!this.ctx.file) new Notice("当前没有打开的笔记，请在 Obsidian 里打开一篇笔记再触发。");
+			if (mode === "replace-selection") new Notice(s("vmNeedSelection"));
+			else if (!this.ctx.file) new Notice(s("vmNeedNote"));
 			return;
 		}
 		this.mode = mode;
@@ -160,10 +225,11 @@ export class VoiceModal extends Modal {
 		}
 	}
 
-	private setBusy(busy: boolean, label = "生成"): void {
+	private setBusy(busy: boolean, label?: string): void {
 		this.busy = busy;
 		this.goBtn.disabled = busy;
-		this.goBtn.setText(busy ? "生成中…" : label);
+		this.goBtn.setText(busy ? s("vmGenerating") : label ?? s("vmGenerate"));
+		for (const btn of this.shotBtns) btn.disabled = busy;
 		this.modalEl.toggleClass("is-busy", busy);
 	}
 
@@ -171,7 +237,7 @@ export class VoiceModal extends Modal {
 		this.stopTimer();
 		this.recTimer = window.setInterval(() => {
 			const seconds = Math.floor(this.recorder?.elapsedSeconds ?? 0);
-			this.recBtn.setText(`■ 结束并转写（${seconds}s）`);
+			this.recBtn.setText(F.recElapsed(seconds));
 			this.recBtn.addClass("is-recording");
 			if (seconds >= MAX_RECORD_SECONDS) void this.finishRecording();
 		}, 250);
@@ -194,17 +260,15 @@ export class VoiceModal extends Modal {
 		this.recorder = new WavRecorder();
 		try {
 			await this.recorder.start({ maxSeconds: MAX_RECORD_SECONDS });
-			this.recBtn.setText("■ 结束并转写（0s）");
+			this.recBtn.setText(F.recElapsed(0));
 			this.recBtn.addClass("is-recording");
-			this.recHint.setText("正在录音…说完点一下结束");
+			this.recHint.setText(s("vmRecording"));
 			this.startTimer();
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			this.recorder = null;
-			new Notice(`打不开麦克风：${msg}`, 8000);
-			this.recHint.setText(
-				"打不开麦克风。到 iPhone「设置 → Obsidian → 麦克风」确认已允许；不行就点键盘上的麦克风用系统听写。"
-			);
+			new Notice(F.micFail(msg), 8000);
+			this.recHint.setText(F.micFailHint());
 		}
 	}
 
@@ -213,7 +277,7 @@ export class VoiceModal extends Modal {
 		if (!recorder || this.transcribing) return;
 		this.stopTimer();
 		this.transcribing = true;
-		this.recBtn.setText("转写中…");
+		this.recBtn.setText(s("vmTranscribing"));
 		this.recBtn.removeClass("is-recording");
 		this.recBtn.disabled = true;
 
@@ -226,7 +290,7 @@ export class VoiceModal extends Modal {
 			this.autoGrow();
 			this.inputEl.focus();
 			this.inputEl.setSelectionRange(this.inputEl.value.length, this.inputEl.value.length);
-			this.recHint.setText("已转成文字，检查一下有没有同音错字，再点「生成」。");
+			this.recHint.setText(s("vmTranscribed"));
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			this.recorder = null;
@@ -235,7 +299,7 @@ export class VoiceModal extends Modal {
 		} finally {
 			this.transcribing = false;
 			this.recBtn.disabled = false;
-			this.recBtn.setText("● 开始说话");
+			this.recBtn.setText(s("vmStart"));
 			this.recBtn.removeClass("is-recording");
 		}
 	}
@@ -245,7 +309,7 @@ export class VoiceModal extends Modal {
 		const box = this.resultEl.createDiv({ cls: "dsv-error" });
 		box.setText(message);
 		if (message.includes("API Key") || message.includes("401")) {
-			const btn = box.createEl("button", { text: "去填 API Key" });
+			const btn = box.createEl("button", { text: s("vmKey") });
 			btn.addEventListener("click", () => {
 				this.close();
 				this.plugin.openSettings();
@@ -255,9 +319,10 @@ export class VoiceModal extends Modal {
 
 	private async submit(): Promise<void> {
 		if (this.busy) return;
-		const instruction = this.inputEl.value.trim();
+		const typed = this.inputEl.value.trim();
+		const instruction = typed || (this.images.length ? s("amPhotoOnly") : "");
 		if (!instruction) {
-			new Notice("先说点什么，或者直接打字。");
+			new Notice(s("vmEmpty"));
 			this.inputEl.focus();
 			return;
 		}
@@ -269,7 +334,17 @@ export class VoiceModal extends Modal {
 
 		try {
 			const messages = buildMessages(this.ctx, instruction, this.mode, this.plugin.settings);
-			const raw = await chatCompletion(this.plugin.settings, messages, { json: true });
+			const detail = await chatCompletionDetailed(this.plugin.settings, messages, {
+				json: true,
+				images: this.images.map((img) => img.dataUrl),
+			});
+			const raw = detail.text;
+			this.usage = detail.usage;
+			this.usedModel = detail.model;
+			this.plugin.recordUsage(detail.usage);
+			// 图已发出，清掉缩略图，避免重试时重复带同一张
+			this.images = [];
+			this.renderShots();
 			const result = parseResult(raw, this.mode);
 			// 模型偶尔会自作主张换落点，强制回落到用户选的那个，避免误写
 			if (result.action !== this.mode && result.action !== "create-note") result.action = this.mode;
@@ -294,36 +369,44 @@ export class VoiceModal extends Modal {
 		summary.setText(res.summary ? `${res.summary}\n${describeResult(res, this.ctx)}` : describeResult(res, this.ctx));
 
 		if (res.notes) {
-			this.resultEl.createDiv({ cls: "dsv-notes", text: `注意：${res.notes}` });
+			this.resultEl.createDiv({ cls: "dsv-notes", text: `${s("vmNote")}${res.notes}` });
 		}
 
 		if (res.action === "replace-selection" && this.ctx.selection) {
 			const old = this.resultEl.createEl("details", { cls: "dsv-preview" });
-			old.createEl("summary", { text: "原来的选中内容" });
+			old.createEl("summary", { text: s("vmOldSelection") });
 			old.createEl("pre", { cls: "dsv-pre" }).setText(this.ctx.selection);
 		}
 
 		if (res.action === "replace-note" && this.ctx.noteContent) {
 			const old = this.resultEl.createEl("details", { cls: "dsv-preview" });
-			old.createEl("summary", { text: "改写前的正文（前 400 字）" });
+			old.createEl("summary", { text: s("vmOldBody") });
 			old.createEl("pre", { cls: "dsv-pre" }).setText(this.ctx.noteContent.slice(0, 400));
 		}
 
 		const preview = this.resultEl.createEl("details", { cls: "dsv-preview" });
-		preview.createEl("summary", { text: `要写入的内容（${res.content.length} 字）` });
+		preview.createEl("summary", { text: F.contentLen(res.content.length) });
 		preview.createEl("pre", { cls: "dsv-pre" }).setText(res.content);
 
+		if (this.usage && this.usedModel && !isEmptyUsage(this.usage)) {
+			const u = this.usage;
+			this.resultEl.createDiv({
+				cls: "dsv-usage",
+				text: F.usageLine(u.hit, u.miss, u.out, estimateCost(u, this.usedModel).toFixed(4), savedByCache(u, this.usedModel).toFixed(4)),
+			});
+		}
+
 		const bar = this.resultEl.createDiv({ cls: "dsv-actions" });
-		const writeBtn = bar.createEl("button", { cls: "mod-cta", text: "写入笔记" });
+		const writeBtn = bar.createEl("button", { cls: "mod-cta", text: s("vmWrite") });
 		writeBtn.addEventListener("click", () => void this.applyResult());
-		const copyBtn = bar.createEl("button", { text: "复制" });
+		const copyBtn = bar.createEl("button", { text: s("vmCopy") });
 		copyBtn.addEventListener("click", () => {
 			void navigator.clipboard
 				.writeText(res.content)
-				.then(() => new Notice("已复制到剪贴板"))
-				.catch(() => new Notice("复制失败，请手动选中复制"));
+				.then(() => new Notice(s("vmCopied")))
+				.catch(() => new Notice(s("vmCopyFail")));
 		});
-		const retryBtn = bar.createEl("button", { text: "重新生成" });
+		const retryBtn = bar.createEl("button", { text: s("vmRetry") });
 		retryBtn.addEventListener("click", () => {
 			this.inputEl.value = this.lastInstruction;
 			this.autoGrow();
