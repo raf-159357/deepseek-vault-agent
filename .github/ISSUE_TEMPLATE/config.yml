@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 邮件 / Email
+    url: mailto:renafu159357@163.com
+    about: 截图多、或者不方便公开说的情况，直接发邮件（renafu159357@163.com）
+  - name: 微信 / WeChat
+    url: https://github.com/raf-159357/deepseek-vault-agent#feedback-and-keeping-this-alive
+    about: 急事、或者想直接聊，README 末尾有二维码
