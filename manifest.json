@@ -1,0 +1,10 @@
+{
+	"id": "deepseek-voice-notes",
+	"name": "DeepSeek Voice Notes",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Speak one sentence — DeepSeek appends, rewrites, or creates a note in your vault. Works on iOS.",
+	"author": "raf-159357",
+	"authorUrl": "https://github.com/raf-159357",
+	"isDesktopOnly": false
+}

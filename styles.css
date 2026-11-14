@@ -1,0 +1,244 @@
+/* DeepSeek Voice Notes —— 复用 Obsidian 主题变量，深色/浅色都跟着主题走 */
+
+.dsv-modal .modal-content,
+.dsv-content {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.dsv-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.dsv-title {
+	font-size: 1.05em;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.dsv-sub {
+	font-size: 0.78em;
+	color: var(--text-muted);
+	word-break: break-all;
+}
+
+.dsv-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.dsv-chip {
+	padding: 6px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 0.85em;
+	cursor: pointer;
+}
+
+.dsv-chip:hover {
+	color: var(--text-normal);
+}
+
+.dsv-chip.is-active {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+.dsv-chip.is-disabled {
+	opacity: 0.4;
+}
+
+.dsv-input {
+	width: 100%;
+	min-height: 96px;
+	max-height: 260px;
+	resize: none;
+	padding: 10px 12px;
+	border-radius: var(--radius-m, 8px);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-text);
+	font-size: 16px; /* iOS 上低于 16px 会自动放大页面 */
+	line-height: 1.5;
+}
+
+.dsv-input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
+.dsv-hint {
+	font-size: 0.76em;
+	color: var(--text-faint);
+	line-height: 1.5;
+}
+
+.dsv-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.dsv-footer button {
+	min-width: 88px;
+	min-height: 40px; /* 手指能按到 */
+}
+
+.dsv-result:empty {
+	display: none;
+}
+
+.dsv-summary {
+	padding: 8px 10px;
+	border-radius: var(--radius-m, 8px);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 0.86em;
+	white-space: pre-wrap;
+	line-height: 1.6;
+}
+
+.dsv-notes {
+	font-size: 0.8em;
+	color: var(--text-warning, var(--text-muted));
+	white-space: pre-wrap;
+	line-height: 1.5;
+}
+
+.dsv-error {
+	padding: 8px 10px;
+	border-radius: var(--radius-m, 8px);
+	background: var(--background-modifier-error);
+	color: var(--text-error);
+	font-size: 0.85em;
+	line-height: 1.6;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	align-items: flex-start;
+}
+
+.dsv-preview {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 8px);
+	padding: 6px 10px;
+}
+
+.dsv-preview summary {
+	cursor: pointer;
+	font-size: 0.82em;
+	color: var(--text-muted);
+}
+
+.dsv-pre {
+	max-height: 240px;
+	overflow: auto;
+	margin: 8px 0 4px;
+	padding: 8px;
+	border-radius: 6px;
+	background: var(--background-primary-alt, var(--background-secondary));
+	color: var(--text-normal);
+	font-size: 0.82em;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.dsv-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.dsv-actions button {
+	min-height: 38px;
+}
+
+.dsv-modal.is-busy .dsv-input {
+	opacity: 0.7;
+}
+
+/* 手机：铺满屏幕，按钮留在拇指区 */
+.is-mobile .dsv-modal {
+	width: 100%;
+	max-width: 100%;
+	height: 100%;
+	max-height: 100%;
+	border-radius: 0;
+	margin: 0;
+}
+
+.is-mobile .dsv-modal .modal-content {
+	padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+	height: 100%;
+}
+
+.is-mobile .dsv-footer button {
+	flex: 1;
+	min-height: 46px;
+	font-size: 1em;
+}
+
+.dsv-settings-help {
+	margin-top: 18px;
+	padding-top: 12px;
+	border-top: 1px solid var(--background-modifier-border);
+	font-size: 0.86em;
+	color: var(--text-muted);
+	line-height: 1.65;
+}
+
+.dsv-settings-help h3 {
+	font-size: 0.95em;
+	color: var(--text-normal);
+	margin-bottom: 6px;
+}
+
+/* 录音条 */
+.dsv-rec {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.dsv-recbtn {
+	width: 100%;
+	min-height: 46px;
+	border-radius: var(--radius-m, 8px);
+	border: 1px dashed var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 0.95em;
+	cursor: pointer;
+}
+
+.dsv-recbtn:hover {
+	border-color: var(--interactive-accent);
+}
+
+.dsv-recbtn.is-recording {
+	border-style: solid;
+	border-color: var(--text-error);
+	color: var(--text-error);
+	background: rgba(214, 69, 69, 0.12);
+	font-weight: 600;
+}
+
+.dsv-recbtn:disabled {
+	opacity: 0.6;
+}
+
+.dsv-rechint {
+	font-size: 0.74em;
+	color: var(--text-faint);
+	line-height: 1.45;
+}
