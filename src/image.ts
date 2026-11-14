@@ -3,7 +3,8 @@
  * 上传前先压到 1400 px、JPEG 0.82 —— 模型那边反正会把图缩到约 1300×1300，
  * 传原图只会白花流量和上传时间。
  */
-import type { PickedImage } from "./types";
+import type { CropRect, PickedImage } from "./types";
+import { FULL_RECT, clampRect, isFull, toCropArea } from "./crop-math";
 import { F } from "./i18n";
 
 /** 长边上限，超过就等比缩小 */
@@ -82,6 +83,8 @@ export async function shrinkImage(file: File, maxSide = MAX_SIDE, quality = QUAL
 			bytes: bytesOfDataUrl(dataUrl),
 			width: decoded.width,
 			height: decoded.height,
+			original: dataUrl,
+			crop: FULL_RECT,
 		};
 	} finally {
 		decoded.release();
@@ -92,8 +95,7 @@ export async function shrinkImage(file: File, maxSide = MAX_SIDE, quality = QUAL
  * 打开系统相机（useCamera）或相册，返回压缩后的图片；用户取消时返回 null。
  * 必须在点击事件里同步调用，iOS 才认这个用户手势。
  */
-export function pickImage(useCamera: boolean): Promise<PickedImage | null> {
-	const input = activeDocument.createElement("input");
+export function pickImage(useCamera: boolean): Promise<PickedImage | null> {	const input = activeDocument.createElement("input");
 	input.type = "file";
 	input.accept = ACCEPT;
 	input.multiple = false;
@@ -146,4 +148,53 @@ export function pickImage(useCamera: boolean): Promise<PickedImage | null> {
 		window.addEventListener("focus", onFocus);
 		input.click();
 	});
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+	const img = activeDocument.createElement("img");
+	return new Promise<HTMLImageElement>((resolve, reject) => {
+		img.onload = () => resolve(img);
+		img.onerror = () => reject(new Error(F.imageFail("decode")));
+		img.src = src;
+	});
+}
+
+/**
+ * 按归一化范围裁一刀，再压到 1400 px。
+ * 底图用 original（未裁过的），所以同一张图反复框选不会越裁越糊。
+ */
+export async function cropImage(base: string, rect: CropRect, prev: PickedImage): Promise<PickedImage> {
+	const safe = clampRect(rect);
+	if (isFull(safe) && prev.original === base) return { ...prev, dataUrl: base, bytes: bytesOfDataUrl(base), crop: FULL_RECT };
+
+	const img = await loadImage(base);
+	const sourceW = img.naturalWidth || img.width;
+	const sourceH = img.naturalHeight || img.height;
+	const { sx, sy, sw, sh } = toCropArea(safe, sourceW, sourceH);
+
+	const render = (maxSide: number, quality: number): { url: string; w: number; h: number } => {
+		const scale = Math.min(1, maxSide / Math.max(sw, sh));
+		const width = Math.max(1, Math.round(sw * scale));
+		const height = Math.max(1, Math.round(sh * scale));
+		const canvas = activeDocument.createElement("canvas");
+		canvas.width = width;
+		canvas.height = height;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) throw new Error(F.imageFail("no canvas"));
+		ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
+		return { url: canvas.toDataURL("image/jpeg", quality), w: width, h: height };
+	};
+
+	let out = render(MAX_SIDE, QUALITY);
+	if (bytesOfDataUrl(out.url) > HARD_BYTES) out = render(Math.round(MAX_SIDE * 0.7), 0.7);
+
+	return {
+		dataUrl: out.url,
+		name: prev.name,
+		bytes: bytesOfDataUrl(out.url),
+		width: out.w,
+		height: out.h,
+		original: base,
+		crop: safe,
+	};
 }

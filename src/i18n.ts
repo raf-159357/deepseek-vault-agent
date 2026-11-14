@@ -120,6 +120,19 @@ const S = {
 		en: "Read what is in the image and write it up as a well-structured note",
 	},
 
+	// —— 框选 ——
+	cropTitle: { zh: "框住要留下的部分", en: "Frame what to keep" },
+	cropHint: {
+		zh: "拖四角调范围，框里可以整体挪动。框外的内容不会发给 AI，也不会进笔记。",
+		en: "Drag the corners, or move the whole frame. Anything outside it is not sent to the model and not saved.",
+	},
+	cropWhole: { zh: "全图", en: "Whole photo" },
+	cropRatio: { zh: "16:9", en: "16:9" },
+	cropCancel: { zh: "取消", en: "Cancel" },
+	cropUse: { zh: "用这块", en: "Use this" },
+	cropSaveNote: { zh: "同时存进笔记", en: "Also save into the note" },
+	cropRedo: { zh: "点一下重新框选", en: "Tap to frame again" },
+
 	// —— 设置页 ——
 	setApiKeyName: { zh: "DeepSeek API Key", en: "DeepSeek API key" },
 	setApiKeyDesc: {
@@ -175,6 +188,17 @@ const S = {
 		en: "Off by default. Even when on, deletions queue for confirmation and only ever go to the trash.",
 	},
 	setModeHead: { zh: "默认动作", en: "Default action" },
+	setShotsHead: { zh: "拍照与截图", en: "Photos" },
+	setCropName: { zh: "拍完先框选", en: "Crop after capture" },
+	setCropDesc: {
+		zh: "拍完先在图上拖出要保留的部分 —— 比如只留投影上那页 PPT，把周围的教室裁掉。框外的内容不会发给模型。",
+		en: "After a photo is taken, drag a frame around what you want — the slide on the projector, not the classroom around it. Nothing outside the frame is sent to the model.",
+	},
+	setShotSaveName: { zh: "框完存进笔记", en: "Save the framed photo into the note" },
+	setShotSaveDesc: {
+		zh: "把裁好的图存成附件，并在光标处插入 ![[…]]。用的是 Obsidian 自己的附件目录设置。",
+		en: "Stores the cropped image as an attachment and inserts ![[…]] at the cursor, using your Obsidian attachment folder setting.",
+	},
 	setModeDesc: { zh: "从命令或 URI 触发时用的默认落点。", en: "Where a command or URI puts the text by default." },
 	setModeAppend: { zh: "追加到当前笔记末尾", en: "Append to the current note" },
 	setModeRewrite: { zh: "改写当前笔记全文", en: "Rewrite the whole note" },
@@ -328,6 +352,12 @@ export const F = {
 			? "Images need deepseek-flash, so this request uses it instead of your selected model."
 			: "识图要用 deepseek-flash，这次请求临时改用它的（你选的模型不支持看图）。",
 	photos: (n: number): string => (lang === "en" ? `${n} image${n === 1 ? "" : "s"}` : `${n} 张图`),
+	shotSaved: (path: string): string => (lang === "en" ? `Saved to “${path}”` : `已存进笔记：${path}`),
+	shotNoNote: (): string =>
+		lang === "en"
+			? "No note is open, so the photo was only sent to the model — nothing was saved."
+			: "当前没有打开的笔记，这张图只发给了模型，没有存进库里。",
+	cropSaved: (path: string): string => (lang === "en" ? `Saved: ${path}` : `已存：${path}`),
 
 	// —— 长任务 ——
 	stepsUsed: (n: number, max: number): string => (lang === "en" ? `Steps · ${n} / ${max}` : `执行过程 · ${n} / ${max}`),

@@ -4,7 +4,10 @@ import { ApiError, supportsVision, transcribe } from "../deepseek";
 import { commitAgent, continueAgent, runAgent } from "../agent";
 import { describeOp } from "../vault-tools";
 import { WavRecorder } from "../audio";
-import { pickImage } from "../image";
+import { cropImage, pickImage } from "../image";
+import { openCropSheet } from "../crop";
+import { FULL_RECT } from "../crop-math";
+import { prepareShot } from "../shot";
 import { clearPending, loadPending, savePending } from "../pending-store";
 import { estimateCost, savedByCache, isEmptyUsage, type Usage } from "../usage";
 import { F, isEn, s } from "../i18n";
@@ -183,7 +186,16 @@ export class AgentModal extends Modal {
 		try {
 			const picked = await pickImage(useCamera);
 			if (!picked) return;
-			this.images.push(picked);
+			const ready = await prepareShot(this.app, picked, {
+				crop: this.plugin.settings.cropShot,
+				save: this.plugin.settings.shotToNote,
+				onSavePref: async (value) => {
+					this.plugin.settings.shotToNote = value;
+					await this.plugin.saveSettings();
+				},
+			});
+			if (!ready) return;
+			this.images.push(ready);
 			this.renderShots();
 			if (!this.visionHinted && !supportsVision(this.plugin.settings.model)) {
 				this.visionHinted = true;
@@ -202,10 +214,12 @@ export class AgentModal extends Modal {
 		this.images.forEach((img, index) => {
 			const cell = this.shotsEl?.createDiv({ cls: "dsv-shot" });
 			if (!cell) return;
-			cell.createEl("img", {
+			const thumb = cell.createEl("img", {
 				cls: "dsv-shot-img",
 				attr: { src: img.dataUrl, alt: img.name },
 			});
+			thumb.setAttribute("title", s("cropRedo"));
+			thumb.addEventListener("click", () => void this.recrop(index));
 			const del = cell.createEl("button", { cls: "dsv-shot-x", text: "×" });
 			del.setAttribute("aria-label", s("amClose"));
 			del.addEventListener("click", () => {
@@ -213,6 +227,17 @@ export class AgentModal extends Modal {
 				this.renderShots();
 			});
 		});
+	}
+
+	/** 点缩略图重开框选：以未裁的原图为底，反复改也不会越裁越糊 */
+	private async recrop(index: number): Promise<void> {
+		const current = this.images[index];
+		if (!current || this.busy) return;
+		const base = current.original ?? current.dataUrl;
+		const choice = await openCropSheet(base, current.crop ?? FULL_RECT, this.plugin.settings.shotToNote);
+		if (!choice) return;
+		this.images[index] = await cropImage(base, choice.rect, current);
+		this.renderShots();
 	}
 
 	private autoGrow(): void {

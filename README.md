@@ -35,11 +35,13 @@ Type or dictate an instruction in plain language:
 
 The agent has nine tools: search notes, list folders, read a note, web search, read a URL, write a note, create a folder, move/rename, and (off by default) move to trash.
 
-**Photos**
+**Photos — framed before they are used**
 
-Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on iOS and Android that is the real camera. The shot is resized to 1400 px and sent to the model, so "photograph this page / this prescription / this whiteboard and turn it into a note" works in one step. Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
+Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on iOS and Android that is the real camera. The shot is resized to 1400 px and then a framing layer opens: drag the four corners, or drag the frame itself, until only the slide on the projector is inside and the classroom around it is not. **Only what is inside the frame is sent to the model.** Tick *Also save into the note* and the same crop is written into the vault as an attachment with `![[…]]` at the cursor — showing the slide in the note instead of a description of it. Tap a thumbnail to frame it again; the original is kept, so re-cropping never stacks compression.
 
-## Status: what works, what doesn't (0.6.0)
+Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
+
+## Status: what works, what doesn't (0.7.0)
 
 Written down honestly, because a marketplace listing that over-promises is worse than a short one.
 
@@ -50,7 +52,7 @@ Written down honestly, because a marketplace listing that over-promises is worse
 - One-tap entry from the phone: a floating button that follows you across the app, Back Tap, lock-screen widget, action button, or a Shortcuts automation.
 - English and Chinese interface, following the app language (and overridable per plugin).
 - Agent mode: search the vault, read notes, list folders, web search, read a link, then create / append / overwrite notes, create folders, move and rename — with a confirmation queue in front of every write.
-- Photos: camera or photo library, up to 4 per message, downscaled before upload.
+- Photos: camera or photo library, up to 4 per message, **cropped to the part you keep** — only the framed area is sent, and it can be saved into the note as an attachment.
 - Nine tools, 8 steps by default (cap 24), 24 queued writes per run, 200k characters per write.
 - When the step budget or the 8-minute wall clock runs out, **Keep going** resumes the same conversation instead of starting over.
 - The confirmation queue is written to disk, so a phone that kills the app does not throw away ten prepared edits.

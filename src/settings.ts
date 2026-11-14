@@ -33,6 +33,9 @@ export interface DeepSeekVoiceSettings {
 	fabBottom: number;
 	/** —— 0.6：累计用量，用来观察缓存命中率 —— */
 	cacheStats: CacheStats;
+	/** —— 0.7：拍照后框选，以及裁好的图是否落进笔记 —— */
+	cropShot: boolean;
+	shotToNote: boolean;
 }
 
 export interface CacheStats {
@@ -71,12 +74,17 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	fabRight: 16,
 	fabBottom: 96,
 	cacheStats: { ...EMPTY_STATS },
+	cropShot: true,
+	shotToNote: true,
 };
 
 /** 老版本的数据里没有 cacheStats，补一个默认值，避免读 undefined */
 export function normalizeSettings(data: Partial<DeepSeekVoiceSettings>): DeepSeekVoiceSettings {
 	const merged: DeepSeekVoiceSettings = Object.assign({}, DEFAULT_SETTINGS, data);
 	merged.cacheStats = Object.assign({}, EMPTY_STATS, data.cacheStats ?? {});
+	// 0.7 新增：老数据里没有这两项，默认都算开启
+	merged.cropShot = data.cropShot !== false;
+	merged.shotToNote = data.shotToNote !== false;
 	return merged;
 }
 
@@ -238,6 +246,28 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 			.addToggle((tg) =>
 				tg.setValue(this.plugin.settings.allowDelete).onChange(async (value) => {
 					this.plugin.settings.allowDelete = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl).setName(t("setShotsHead")).setHeading();
+
+		new Setting(containerEl)
+			.setName(t("setCropName"))
+			.setDesc(t("setCropDesc"))
+			.addToggle((tg) =>
+				tg.setValue(this.plugin.settings.cropShot).onChange(async (value) => {
+					this.plugin.settings.cropShot = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName(t("setShotSaveName"))
+			.setDesc(t("setShotSaveDesc"))
+			.addToggle((tg) =>
+				tg.setValue(this.plugin.settings.shotToNote).onChange(async (value) => {
+					this.plugin.settings.shotToNote = value;
 					await this.plugin.saveSettings();
 				})
 			);

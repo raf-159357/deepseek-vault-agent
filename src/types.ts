@@ -95,6 +95,18 @@ export interface PickedImage {
 	bytes: number;
 	width: number;
 	height: number;
+	/** 未裁的原图（长边已压到 1400）；再框选一次时以它为底，不叠加损失 */
+	original?: string;
+	/** 当前这张图用的框选范围；没有就是整张 */
+	crop?: CropRect;
+}
+
+/** 框选范围，按图片宽高归一化到 0–1，换设备、换缩放都不受影响 */
+export interface CropRect {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
 }
 
 export interface AgentRunResult {

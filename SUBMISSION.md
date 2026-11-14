@@ -1,6 +1,6 @@
 # Marketplace submission sheet / 上架提交材料
 
-Everything needed to submit version **0.6.0**
+Everything needed to submit version **0.7.0**
 
 - Cache work that goes beyond "we put the static part first": the note being edited now lives in its own message so repeated edits of the same note hit cache from the second pass; duplicate reads inside one run are answered with a pointer instead of the text; tool output is capped at 9k characters keeping the tail, because it is re-sent on every later step.
 - Settings show a running tally (requests, cache hit rate of all input, spent, saved) with a reset.
@@ -69,6 +69,8 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 >
 > **File access.** Uses the public `Vault` / `FileManager` / `MetadataCache` APIs only. Paths are validated: no `..`, no absolute paths, no dot-folders (`.obsidian`, `.git`, `.trash`), no `node_modules`. Deleting is off by default; when on, it calls `FileManager.trashFile()` (the user's own trash preference), never a hard delete.
 >
+> **Photo attachments.** Since 0.7.0 there is one more write path, and it is never the model that triggers it: when the user presses "Use this" on a framed photo with *Also save into the note* ticked, the plugin calls `FileManager.getAvailablePathForAttachment()` (so the user's own attachment folder setting decides the location) and `Vault.createBinary()` to store one JPEG, then inserts `![[path]]` at the cursor. No other binary is ever created, and no image is written unless the user confirms the crop.
+>
 > **Language.** UI strings are English or Chinese depending on Obsidian's language setting (overridable per plugin). The model is instructed to answer in the language of the instruction.
 >
 > **Mobile.** `isDesktopOnly: false` and no Node/Electron APIs are used. Audio is captured with `getUserMedia` + `AudioContext` + `ScriptProcessorNode` and encoded to 16-bit PCM WAV in JS (MediaRecorder is not used, because iOS gives it mp4/aac, which the ASR endpoint rejects). Settings and dialogs are laid out for narrow screens.
@@ -89,6 +91,8 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 >
 > **文件访问。** 只用 `Vault` / `FileManager` / `MetadataCache` 公开 API。路径做校验：拒绝 `..`、绝对路径、点目录（`.obsidian`、`.git`、`.trash`）、`node_modules`。删除默认关闭；开启后走 `FileManager.trashFile()`（尊重用户自己的删除偏好），绝不硬删除。
 >
+> **照片附件。** 0.7.0 多了一条写入路径，而且这条路径永远不会由模型触发：用户在框选层点「用这块」、并且勾着「同时存进笔记」时，插件用 `FileManager.getAvailablePathForAttachment()`（落点由用户自己的附件目录设置决定）和 `Vault.createBinary()` 存一张 JPEG，然后在光标处插入 `![[路径]]`。除此之外不创建任何二进制文件，不确认框选就不会写图。
+>
 > **语言。** 界面文案按 Obsidian 的语言设置走中英两套（插件里可单独指定）；模型被要求用用户指令的语言回答。
 >
 > **手机。** `isDesktopOnly: false`，不使用 Node/Electron 专有 API；录音是 `getUserMedia` + `AudioContext` + `ScriptProcessorNode`，在 JS 里自己编 16-bit PCM WAV（不用 MediaRecorder，因为 iOS 上它只给 mp4/aac，转写接口不收）；弹窗和设置页按窄屏排版。
@@ -102,6 +106,14 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 ---
 
 ## 4. Changelog for this submission / 本次提交的变更
+
+**0.7.0**
+
+- Framing after capture: a photo is not sent straight to the model any more. A crop layer opens first — drag the four corners or the frame itself — and only what is inside the frame is uploaded. Built for the classroom case: photograph the projector, keep the slide, drop the room.
+- A `16:9` button snaps the frame to slide proportions in one tap.
+- *Also save into the note* stores the cropped JPEG through `getAvailablePathForAttachment()` + `createBinary()` and inserts `![[…]]` at the cursor. Off with one tap, remembered afterwards.
+- Tapping a thumbnail reopens the frame against the untouched original, so re-cropping does not lose quality.
+- Two new settings (crop after capture, save the framed photo) under a new **Photos** heading.
 
 **0.6.0**
 
@@ -162,16 +174,16 @@ Or do it by hand at <https://github.com/raf-159357/deepseek-vault-agent/releases
 
 | Field | Value |
 | --- | --- |
-| Tag | `0.6.0` — no `v`, must equal `manifest.json` `version` |
+| Tag | `0.7.0` — no `v`, must equal `manifest.json` `version` |
 | Target | `main` |
-| Title | `0.6.0` |
+| Title | `0.7.0` |
 | Assets | exactly these three, names unchanged: `main.js`, `manifest.json`, `styles.css` |
 
 Anything else attached to the release (source zips are added automatically) is ignored, but do not attach a second `main.js`.
 
 ### 6.2 Then on the portal / 然后回门户
 
-1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.6.0`.
+1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.7.0`.
 2. Nothing else to submit. The listing text comes from `manifest.json`; the categories and payment choice were already set on the first submission.
 3. Only **Error** blocks a release. **Recommendation** and **Warning** do not — the three entries currently shown (release attestation, vault enumeration, clipboard) are all Recommendations, and two of them are answered in section 3 above.
 4. Do not press **Archive** in the `…` menu: that takes the plugin off the list and the whole submission has to start over.
