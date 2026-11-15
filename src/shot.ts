@@ -36,8 +36,14 @@ export async function prepareShot(app: App, picked: PickedImage, prefs: ShotPref
 	}
 
 	if (save) {
-		const path = await saveShot(app, image);
-		new Notice(path ? F.shotSaved(path) : F.shotNoNote(), 5000);
+		const saved = await saveShot(app, image);
+		if (saved) {
+			// 记住路径：模型写笔记时要用 ![[路径]] 引用它
+			image = { ...image, savedPath: saved.path };
+			new Notice(saved.inserted ? F.shotSaved(saved.path) : F.shotSavedNoNote(saved.path), 6000);
+		} else {
+			new Notice(F.shotSaveFail(), 6000);
+		}
 	}
 
 	return image;

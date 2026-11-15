@@ -8,6 +8,7 @@ import { cropImage, pickImage } from "../image";
 import { openCropSheet } from "../crop";
 import { FULL_RECT } from "../crop-math";
 import { prepareShot } from "../shot";
+import { replaceShot } from "../shot-save";
 import { estimateCost, isEmptyUsage, savedByCache, type Usage } from "../usage";
 import { F, s } from "../i18n";
 import { MAX_IMAGES } from "../types";
@@ -221,7 +222,7 @@ export class VoiceModal extends Modal {
 		const base = current.original ?? current.dataUrl;
 		const choice = await openCropSheet(base, current.crop ?? FULL_RECT, this.plugin.settings.shotToNote);
 		if (!choice) return;
-		this.images[index] = await cropImage(base, choice.rect, current);
+		this.images[index] = await replaceShot(this.app, await cropImage(base, choice.rect, current));
 		this.renderShots();
 	}
 

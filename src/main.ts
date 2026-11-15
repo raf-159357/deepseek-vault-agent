@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, DeepSeekVoiceSettings, normalizeSettings, VoiceNotesS
 import { buildContext, VoiceModal, VoiceModalOptions } from "./ui/voice-modal";
 import { AgentModal, AgentModalOptions } from "./ui/agent-modal";
 import { resetLang, s, setLang } from "./i18n";
-import type { VoiceContext, VoiceMode } from "./types";
+import type { AgentState, VoiceContext, VoiceMode } from "./types";
 import { isEmptyUsage, type Usage } from "./usage";
 
 const VALID_MODES: VoiceMode[] = ["append", "replace-selection", "replace-note", "create-note"];
@@ -18,6 +18,11 @@ function pick(params: Record<string, string>, ...keys: string[]): string | undef
 
 export default class DeepSeekVoicePlugin extends Plugin {
 	settings: DeepSeekVoiceSettings = { ...DEFAULT_SETTINGS };
+	/**
+	 * 当前这段 AI 对话。存在插件实例上（不是弹窗里），
+	 * 所以关掉弹窗再打开能接着聊；Obsidian 重启就重来。
+	 */
+	agentSession: AgentState | null = null;
 	private fabEl: HTMLElement | null = null;
 	private statsTimer: number | null = null;
 

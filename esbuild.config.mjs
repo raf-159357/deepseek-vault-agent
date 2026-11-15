@@ -5,7 +5,7 @@ const prod = process.argv[2] === "production";
 
 const banner = `/*
 DeepSeek Vault Agent — built ${new Date().toISOString()}
-个人自用插件，未发布到 Obsidian 社区市场。
+MIT · https://github.com/raf-159357/deepseek-vault-agent
 */`;
 
 const context = await esbuild.context({

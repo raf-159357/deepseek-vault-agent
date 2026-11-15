@@ -1,20 +1,28 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
 import type DeepSeekVoicePlugin from "../main";
 import { ApiError, supportsVision, transcribe } from "../deepseek";
-import { commitAgent, continueAgent, runAgent } from "../agent";
+import { commitAgent, continueAgent, followUpAgent, runAgent } from "../agent";
 import { describeOp } from "../vault-tools";
 import { WavRecorder } from "../audio";
 import { cropImage, pickImage } from "../image";
 import { openCropSheet } from "../crop";
 import { FULL_RECT } from "../crop-math";
 import { prepareShot } from "../shot";
+import { replaceShot } from "../shot-save";
 import { clearPending, loadPending, savePending } from "../pending-store";
 import { estimateCost, savedByCache, isEmptyUsage, type Usage } from "../usage";
 import { F, isEn, s } from "../i18n";
 import { AGENT_STEP_LIMIT, MAX_IMAGES } from "../types";
-import type { AgentState, AgentStep, PendingOp, PickedImage, StopReason, VoiceContext } from "../types";
+import type { AgentRunResult, AgentState, AgentStep, PendingOp, PickedImage, StopReason, VoiceContext } from "../types";
 
 const MAX_RECORD_SECONDS = 120;
+/** 对话流里最多显示几轮，再早的收起来，免得手机上翻半天 */
+const MAX_THREAD_TURNS = 6;
+
+function errorMessage(err: unknown): string {
+	if (err instanceof ApiError) return err.message;
+	return err instanceof Error ? err.message : String(err);
+}
 
 export interface AgentModalOptions {
 	presetText?: string;
@@ -36,6 +44,9 @@ export class AgentModal extends Modal {
 	private stepsEl!: HTMLElement;
 	private stepsHead!: HTMLElement;
 	private resultEl!: HTMLElement;
+	private threadEl: HTMLElement | null = null;
+	private badgeEl!: HTMLElement;
+	private newChatBtn!: HTMLButtonElement;
 	private busy = false;
 
 	private recorder: WavRecorder | null = null;
@@ -44,7 +55,11 @@ export class AgentModal extends Modal {
 	private pending: PendingOp[] = [];
 	private images: PickedImage[] = [];
 	private state: AgentState | null = null;
+	/** 下一句要顺手告诉模型的补充说明（上一批操作执行了 / 被丢弃了） */
+	private appliedNote = "";
 	private visionHinted = false;
+	/** 没存进库时只提醒一次，别每次加图都弹 */
+	private shotHinted = false;
 	private stepCount = 0;
 
 	constructor(app: App, plugin: DeepSeekVoicePlugin, ctx: VoiceContext, options: AgentModalOptions = {}) {
@@ -62,12 +77,16 @@ export class AgentModal extends Modal {
 		contentEl.addClass("dsv-content");
 
 		const head = contentEl.createDiv({ cls: "dsv-head" });
-		head.createDiv({ cls: "dsv-title", text: s("amTitle") });
+		const headTop = head.createDiv({ cls: "dsv-head-top" });
+		headTop.createDiv({ cls: "dsv-title", text: s("amTitle") });
+		this.newChatBtn = headTop.createEl("button", { cls: "dsv-newchat", text: s("amNewChat") });
+		this.newChatBtn.addEventListener("click", () => void this.newChat());
 		const where = this.ctx.file ? this.ctx.file.path : isEn() ? "no note open" : "当前没有打开的笔记";
 		head.createDiv({
 			cls: "dsv-sub",
 			text: isEn() ? `${where} · web access · reads and writes this vault` : `${where} · 可联网 · 可读写本库`,
 		});
+		this.badgeEl = head.createDiv({ cls: "dsv-badge" });
 
 		const chips = contentEl.createDiv({ cls: "dsv-chips" });
 		for (const text of s("amSamples").split("\n")) {
@@ -116,6 +135,8 @@ export class AgentModal extends Modal {
 		this.runBtn.addEventListener("click", () => void this.run());
 
 		this.autoGrow();
+		this.adoptSession();
+		this.syncHead();
 		void this.restoreQueue();
 
 		window.setTimeout(() => {
@@ -157,24 +178,67 @@ export class AgentModal extends Modal {
 
 	/** 上次没执行完的写操作：手机上 App 被系统杀掉也能接着用 */
 	private async restoreQueue(): Promise<void> {
-		if (this.state || this.pending.length) return;
+		if (this.pending.length) return;
 		const saved = await loadPending(this.app, this.plugin.manifest.id);
-		if (!saved.length || this.state || this.pending.length) return;
+		if (!saved.length || this.pending.length) return;
 		this.pending = saved;
-		this.renderResult(F.restored(saved.length), saved, "done");
+		// 接着上次的对话时，队列也要跟着回到这段对话里
+		if (this.state) this.state.pending = saved;
+		this.renderTurn(null, F.restored(saved.length), saved, "done");
+	}
+
+	/** 关掉弹窗再打开，还是同一段对话 —— 用户不必把背景重讲一遍 */
+	private adoptSession(): void {
+		const saved = this.plugin.agentSession;
+		if (!saved || !saved.messages.length) return;
+		this.state = saved;
+		this.pending = saved.pending ?? [];
+		this.renderTurn(null, F.resumed(saved.turns ?? 1), this.pending, "done");
+	}
+
+	/** 抬头上的「第几轮 / 新对话」和输入框提示，都跟着当前有没有对话走 */
+	private syncHead(): void {
+		const turns = this.state?.turns ?? 0;
+		this.badgeEl.setText(turns > 1 ? F.turnsHint(turns) : "");
+		this.badgeEl.toggleClass("is-empty", turns <= 1);
+		this.newChatBtn.toggleClass("is-hidden", !this.state);
+		this.inputEl.placeholder = this.state ? s("amPlaceholderNext") : s("amPlaceholder");
+		if (!this.busy) this.runBtn.setText(this.state ? s("amSend") : s("amRun"));
 	}
 
 	private async discard(): Promise<void> {
+		const n = this.pending.length;
 		this.pending = [];
-		this.state = null;
+		if (this.state) this.state.pending = [];
 		await clearPending(this.app, this.plugin.manifest.id);
-		this.resultEl.empty();
+		this.appliedNote = n ? F.discardedForModel(n) : "";
+		this.renderTurn(null, F.discardedContinue(n), [], "done");
+		this.syncHead();
 	}
 
-	private usageLine(usage: Usage, model: string): HTMLElement {
+	private async newChat(): Promise<void> {
+		if (this.busy) return;
+		this.state = null;
+		this.plugin.agentSession = null;
+		this.appliedNote = "";
+		this.threadEl = null;
+		this.resultEl.empty();
+		this.stepsEl.empty();
+		this.stepsHead.setText("");
+		this.stepCount = 0;
+		this.inputEl.value = "";
+		this.autoGrow();
+		this.syncHead();
+		// 待确认的写操作是真实排好的，开新对话不等于丢弃它们
+		if (this.pending.length) this.renderTurn(null, F.newChatKept(this.pending.length), this.pending, "done");
+		else new Notice(F.newChatStarted());
+		this.inputEl.focus();
+	}
+
+	private usageText(usage: Usage, model: string): string {
 		const cost = estimateCost(usage, model).toFixed(4);
 		const saved = savedByCache(usage, model).toFixed(4);
-		return this.resultEl.createDiv({ cls: "dsv-usage", text: F.usageLine(usage.hit, usage.miss, usage.out, cost, saved) });
+		return F.usageLine(usage.hit, usage.miss, usage.out, cost, saved);
 	}
 
 	private async addImage(useCamera: boolean): Promise<void> {
@@ -197,6 +261,11 @@ export class AgentModal extends Modal {
 			if (!ready) return;
 			this.images.push(ready);
 			this.renderShots();
+			// 没存进库就没有路径，模型没法在笔记里引用它 —— 先说清楚
+			if (!ready.savedPath && !this.shotHinted) {
+				this.shotHinted = true;
+				new Notice(F.shotOffHint(), 9000);
+			}
 			if (!this.visionHinted && !supportsVision(this.plugin.settings.model)) {
 				this.visionHinted = true;
 				new Notice(F.visionSwap(), 7000);
@@ -236,7 +305,7 @@ export class AgentModal extends Modal {
 		const base = current.original ?? current.dataUrl;
 		const choice = await openCropSheet(base, current.crop ?? FULL_RECT, this.plugin.settings.shotToNote);
 		if (!choice) return;
-		this.images[index] = await cropImage(base, choice.rect, current);
+		this.images[index] = await replaceShot(this.app, await cropImage(base, choice.rect, current));
 		this.renderShots();
 	}
 
@@ -247,7 +316,7 @@ export class AgentModal extends Modal {
 	private setBusy(busy: boolean, label?: string): void {
 		this.busy = busy;
 		this.runBtn.disabled = busy;
-		this.runBtn.setText(busy ? s("amRunning") : label ?? s("amRun"));
+		this.runBtn.setText(busy ? s("amRunning") : label ?? (this.state ? s("amSend") : s("amRun")));
 		for (const btn of this.shotBtns) btn.disabled = busy;
 		this.modalEl.toggleClass("is-busy", busy);
 	}
@@ -337,7 +406,8 @@ export class AgentModal extends Modal {
 	}
 
 	private showError(message: string): void {
-		this.resultEl.empty();
+		// 只清掉按钮和上一次的错误，上面的对话记录留着
+		this.clearActions();
 		const box = this.resultEl.createDiv({ cls: "dsv-error" });
 		box.setText(message);
 		if (message.includes("API Key") || message.includes("401") || message.includes("API key")) {
@@ -360,34 +430,64 @@ export class AgentModal extends Modal {
 			return;
 		}
 
-		// 保留还没执行的队列（可能是上次恢复的），新一轮在它后面继续排
-		this.state = null;
+		const state = this.state;
+		const before = state ? { ...state.usage } : null;
+		const note = this.appliedNote;
+		this.appliedNote = "";
+
 		this.stepsEl.empty();
 		this.stepCount = 0;
 		this.stepsHead.setText("");
-		this.resultEl.empty();
 		this.setBusy(true);
 
 		try {
-			const result = await runAgent(this.app, this.plugin.settings, this.ctx, instruction, {
-				images: this.images.map((img) => img.dataUrl),
-				pending: this.pending,
-				onStep: (step) => this.addStep(step),
-			});
-			this.state = result.state;
-			this.pending = result.pending;
-			this.plugin.recordUsage(result.usage);
-			await savePending(this.app, this.plugin.manifest.id, this.pending);
+			const images = this.images.map((img) => img.dataUrl);
+			const shots = this.images.map((img) => img.savedPath).filter((p): p is string => !!p);
+			const onStep = (step: AgentStep): void => this.addStep(step);
+			// 已经在对话里就接着说（上文都在），没有才新开一段
+			const result = state
+				? await followUpAgent(this.app, this.plugin.settings, state, this.ctx, instruction, {
+						images,
+						shots,
+						note,
+						onStep,
+				  })
+				: await runAgent(this.app, this.plugin.settings, this.ctx, instruction, {
+						images,
+						shots,
+						pending: this.pending,
+						onStep,
+				  });
+
 			// 图已经发出去了，清掉缩略图，免得下一句又带同一张
 			this.images = [];
 			this.renderShots();
-			this.renderResult(result.reply, result.pending, result.stopped, result.usage, result.model);
+			this.applyResult(instruction, result, before);
 		} catch (err) {
-			const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-			this.showError(msg);
+			this.showError(errorMessage(err));
 		} finally {
 			this.setBusy(false);
 		}
+		this.syncHead();
+	}
+
+	/** 一次运行的结果落到界面上：对话流里追加一轮，按钮跟着换 */
+	private applyResult(ask: string, result: AgentRunResult, before: Usage | null): void {
+		this.state = result.state;
+		this.plugin.agentSession = result.state;
+		this.pending = result.pending;
+		// 接口给的是这一段对话的累计用量，账本只记这一轮新增的
+		const delta = before
+			? {
+					hit: result.usage.hit - before.hit,
+					miss: result.usage.miss - before.miss,
+					out: result.usage.out - before.out,
+			  }
+			: result.usage;
+		this.plugin.recordUsage(delta);
+		void savePending(this.app, this.plugin.manifest.id, this.pending);
+		this.renderTurn(ask, result.reply, result.pending, result.stopped, delta, result.model);
+		this.syncHead();
 	}
 
 	private async runMore(): Promise<void> {
@@ -399,63 +499,116 @@ export class AgentModal extends Modal {
 				onStep: (step) => this.addStep(step),
 			});
 			this.state = result.state;
+			this.plugin.agentSession = result.state;
 			this.pending = result.pending;
 			// 续跑返回的是累计用量，这里只记新增那几步，避免和上一轮重复计账
-			this.plugin.recordUsage({
+			const delta = {
 				hit: result.usage.hit - before.hit,
 				miss: result.usage.miss - before.miss,
 				out: result.usage.out - before.out,
-			});
-			await savePending(this.app, this.plugin.manifest.id, this.pending);
-			this.renderResult(result.reply, result.pending, result.stopped, result.usage, result.model);
+			};
+			this.plugin.recordUsage(delta);
+			void savePending(this.app, this.plugin.manifest.id, this.pending);
+			// 续跑是同一条回答的延续，就地更新，不另起一轮
+			this.updateLastTurn(result.reply, result.pending, result.stopped, delta, result.model);
 		} catch (err) {
-			const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-			this.showError(msg);
+			this.showError(errorMessage(err));
 		} finally {
 			this.setBusy(false);
 		}
+		this.syncHead();
 	}
 
-	private renderResult(
+	private ensureThread(): HTMLElement {
+		if (!this.threadEl || !this.threadEl.isConnected) {
+			this.resultEl.empty();
+			this.threadEl = this.resultEl.createDiv({ cls: "dsv-thread" });
+		}
+		return this.threadEl;
+	}
+
+	/** 按钮和错误条每轮重画，对话记录不动 */
+	private clearActions(): void {
+		for (const el of Array.from(this.resultEl.querySelectorAll(".dsv-actions, .dsv-ops, .dsv-error"))) {
+			el.remove();
+		}
+	}
+
+	private lastTurn(): HTMLElement | null {
+		return (this.threadEl?.lastElementChild as HTMLElement | undefined) ?? null;
+	}
+
+	/** 对话流追加一轮：你说的话 + 它答的话；早于 6 轮的收起，手机上不至于翻半天 */
+	private renderTurn(
+		ask: string | null,
 		reply: string,
 		pending: PendingOp[],
 		stopped: StopReason,
 		usage?: Usage,
 		model?: string
 	): void {
-		this.resultEl.empty();
+		const thread = this.ensureThread();
+		this.clearActions();
 
-		const body = this.resultEl.createDiv({ cls: "dsv-reply" });
-		body.setText(reply);
-
-		if (!pending.length) {
-			const bar = this.resultEl.createDiv({ cls: "dsv-actions" });
-			if (stopped !== "done") {
-				const more = bar.createEl("button", { cls: "mod-cta dsv-btn-main", text: s("amContinue") });
-				more.addEventListener("click", () => void this.runMore());
-			}
-			const copy = bar.createEl("button", { text: s("amCopyReply") });
-			copy.addEventListener("click", () => {
-				void navigator.clipboard
-					.writeText(reply)
-					.then(() => new Notice(s("vmCopied")))
-					.catch(() => new Notice(s("vmCopyFail")));
-			});
-			if (usage && model && !isEmptyUsage(usage)) this.usageLine(usage, model);
-			return;
+		const turn = thread.createDiv({ cls: ask ? "dsv-turn" : "dsv-turn is-note" });
+		if (ask) {
+			const row = turn.createDiv({ cls: "dsv-ask" });
+			row.createSpan({ cls: "dsv-ask-label", text: F.you() });
+			row.createSpan({ cls: "dsv-ask-text", text: ask });
+		}
+		turn.createDiv({ cls: "dsv-reply", text: reply });
+		if (usage && model && !isEmptyUsage(usage)) {
+			turn.createDiv({ cls: "dsv-usage", text: this.usageText(usage, model) });
 		}
 
-		const box = this.resultEl.createDiv({ cls: "dsv-ops" });
-		box.createDiv({ cls: "dsv-ops-title", text: F.pendingOps(pending.length) });
-		for (const op of pending) {
-			const row = box.createDiv({ cls: `dsv-op is-${op.kind}` });
-			row.createSpan({ cls: "dsv-op-dot" });
-			row.createSpan({ cls: "dsv-op-text", text: describeOp(op) });
+		while (thread.children.length > MAX_THREAD_TURNS) {
+			const oldest = thread.firstElementChild;
+			if (!oldest) break;
+			oldest.remove();
+		}
+
+		this.renderActions(reply, pending, stopped);
+		turn.scrollIntoView({ block: "nearest" });
+	}
+
+	/** 续跑：同一轮回答换掉，不新起一轮 */
+	private updateLastTurn(reply: string, pending: PendingOp[], stopped: StopReason, usage?: Usage, model?: string): void {
+		const turn = this.lastTurn();
+		this.clearActions();
+		if (turn) {
+			const body = turn.querySelector<HTMLElement>(".dsv-reply");
+			if (body) body.setText(reply);
+			turn.querySelector(".dsv-usage")?.remove();
+			if (usage && model && !isEmptyUsage(usage)) {
+				turn.createDiv({ cls: "dsv-usage", text: this.usageText(usage, model) });
+			}
+		}
+		this.renderActions(reply, pending, stopped);
+	}
+
+	private renderActions(reply: string, pending: PendingOp[], stopped: StopReason): void {
+		if (pending.length) {
+			const box = this.resultEl.createDiv({ cls: "dsv-ops" });
+			box.createDiv({ cls: "dsv-ops-title", text: F.pendingOps(pending.length) });
+			for (const op of pending) {
+				const row = box.createDiv({ cls: `dsv-op is-${op.kind}` });
+				row.createSpan({ cls: "dsv-op-dot" });
+				row.createSpan({ cls: "dsv-op-text", text: describeOp(op) });
+			}
 		}
 
 		const bar = this.resultEl.createDiv({ cls: "dsv-actions" });
-		const go = bar.createEl("button", { cls: "mod-cta dsv-btn-main", text: s("amCommit") });
-		go.addEventListener("click", () => void this.commit(go));
+		if (pending.length) {
+			const go = bar.createEl("button", { cls: "mod-cta dsv-btn-main", text: s("amCommit") });
+			go.addEventListener("click", () => void this.commit(go));
+		}
+
+		// 不管答完没答完都留一个「接着问」：之前答完只剩复制，对话就断在这儿
+		const ask = bar.createEl("button", { text: s("amAsk") });
+		ask.addClass("dsv-btn-main");
+		if (!pending.length) ask.addClass("mod-cta");
+		ask.addEventListener("click", () => this.focusAsk());
+
 		if (stopped !== "done") {
 			const more = bar.createEl("button", { text: s("amContinue") });
 			more.addEventListener("click", () => void this.runMore());
@@ -467,9 +620,15 @@ export class AgentModal extends Modal {
 				.then(() => new Notice(s("vmCopied")))
 				.catch(() => new Notice(s("vmCopyFail")));
 		});
-		const drop = bar.createEl("button", { text: s("amDiscard") });
-		drop.addEventListener("click", () => void this.discard());
-		if (usage && model && !isEmptyUsage(usage)) this.usageLine(usage, model);
+		if (pending.length) {
+			const drop = bar.createEl("button", { text: s("amDiscard") });
+			drop.addEventListener("click", () => void this.discard());
+		}
+	}
+
+	private focusAsk(): void {
+		this.inputEl.focus();
+		this.inputEl.scrollIntoView({ block: "center", behavior: "smooth" });
 	}
 
 	private async commit(btn: HTMLButtonElement): Promise<void> {
@@ -477,10 +636,13 @@ export class AgentModal extends Modal {
 		btn.disabled = true;
 		btn.setText(s("amCommitting"));
 		try {
+			const count = this.pending.length;
 			const done = await commitAgent(this.app, this.pending);
 			new Notice(done.length ? F.doneNotice(done[0]) : s("toastApplied"), 6000);
 			this.pending = [];
-			this.state = null;
+			// 执行完不清空对话：上文还在，下一句可以直接说「再把标题改一下」
+			if (this.state) this.state.pending = [];
+			this.appliedNote = F.appliedForModel(count);
 			await clearPending(this.app, this.plugin.manifest.id);
 			this.addStep({
 				tool: "commit",
@@ -488,15 +650,16 @@ export class AgentModal extends Modal {
 				ok: true,
 			});
 			// 手机上连着做事：执行完不关窗，清空输入等着下一句
-			this.resultEl.empty();
-			this.resultEl.createDiv({ cls: "dsv-reply", text: s("amDone") });
+			this.renderTurn(null, F.appliedContinue(done.length), [], "done");
 			this.inputEl.value = "";
 			this.autoGrow();
 			this.inputEl.focus();
+			this.syncHead();
 		} catch (err) {
 			btn.disabled = false;
 			btn.setText(s("amCommit"));
-			this.showError(err instanceof Error ? err.message : String(err));
+			this.showError(errorMessage(err));
 		}
 	}
 }
+

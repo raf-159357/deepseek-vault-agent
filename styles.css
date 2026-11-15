@@ -47,6 +47,46 @@
 	line-height: 1.5;
 }
 
+/* 抬头右侧的「新对话」+ 下面那行「第几轮」提示 */
+.dsv-head-top {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.dsv-newchat {
+	flex: 0 0 auto;
+	min-height: 0;
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-faint);
+	font-size: 0.76em;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.dsv-newchat:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.dsv-newchat.is-hidden {
+	display: none;
+}
+
+.dsv-badge {
+	font-size: 0.72em;
+	color: var(--interactive-accent);
+	line-height: 1.5;
+}
+
+.dsv-badge.is-empty {
+	display: none;
+}
+
 /* —— 落点选择：像标签，不像开关 —— */
 .dsv-chips {
 	display: flex;
@@ -327,6 +367,55 @@
 	border-radius: var(--dsv-radius);
 	padding: 14px 16px;
 }
+
+/* —— 对话流：一轮 = 你说的 + 它答的 —— */
+.dsv-thread {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.dsv-turn {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.dsv-turn + .dsv-turn {
+	padding-top: 14px;
+	border-top: 1px solid var(--dsv-line, var(--background-modifier-border));
+}
+
+.dsv-ask {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+.dsv-ask-label {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+}
+
+/* 之前说过的话只留两行，重点还是它这句回答 */
+.dsv-ask-text {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	word-break: break-word;
+}
+
+.dsv-turn.is-note .dsv-reply {
+	background: transparent;
+	padding: 0;
+	font-size: 0.82em;
+	color: var(--text-muted);
+}
+
 
 /* —— 执行过程：细轨画在容器里，圆点压在上面，不会被滚动裁掉 —— */
 .dsv-steps-head {

@@ -32,6 +32,12 @@ const READ_TOOLS = new Set(["search_notes", "list_folder", "read_note", "read_ur
  * 所以宁可在源头截断，也不要让一大篇网页在 20 步里反复计费。
  */
 const TOOL_RESULT_CHARS = 9000;
+/**
+ * 一段对话最多留多少条消息。
+ * 用户接着说是常态，历史只增不减的话每一轮都在为前面所有工具结果付钱，
+ * 所以到顶就从最早的一整轮开始丢。
+ */
+const MAX_HISTORY_MESSAGES = 48;
 
 /** 保留头尾的截断：结尾常有结论，砍掉可惜 */
 function clip(text: string, max: number = TOOL_RESULT_CHARS): string {
@@ -100,7 +106,7 @@ function buildTools(settings: DeepSeekVoiceSettings): unknown[] {
 	tools.push(
 		tool(
 			"write_note",
-			"写笔记。mode=create 新建（已存在会报错）、append 追加到末尾、overwrite 整篇替换。需要时会自动创建上级文件夹。",
+			"写笔记。mode=create 新建（已存在会报错）、append 追加到末尾、overwrite 整篇替换。需要时会自动创建上级文件夹。要插入本次附带的图片时，正文里直接写 ![[图片路径]]。",
 			{
 				path: { type: "string", description: "库内相对路径，带不带 .md 都行，例如 00_Inbox/读书笔记" },
 				mode: { type: "string", enum: ["create", "append", "overwrite"], description: "写入方式" },
@@ -289,6 +295,8 @@ export interface AgentOptions {
 export interface AgentStartOptions extends AgentOptions {
 	/** 随这条指令一起发出去的图片（data URL） */
 	images?: string[];
+	/** 这些图片存进库之后的路径，模型要靠它写 ![[…]] */
+	shots?: string[];
 	/** 上一次没执行完的写操作，接着排进同一个队列 */
 	pending?: PendingOp[];
 }
@@ -425,6 +433,11 @@ async function runLoop(
 					"No conclusion this time — be more specific about what to search for or where to write."
 			  );
 	}
+	// 这一问一答要留在上下文里：用户下一句「接着」时，模型才知道自己刚才说了什么。
+	// 只有正常答完才补 assistant；步数/时间用尽时最后一条是 tool 回灌，补了反而多余。
+	if (stopped === "done" && reply) {
+		state.messages.push({ role: "assistant", content: reply });
+	}
 	if (reply && state.pending.length) {
 		reply += `\n\n${F.line(
 			`（还有 ${state.pending.length} 个写操作待确认）`,
@@ -436,6 +449,58 @@ async function runLoop(
 	}
 
 	return { reply, steps: state.steps, pending: state.pending, stopped, state, usage: state.usage, model };
+}
+
+/**
+ * 一轮用户消息的内容：当前笔记、确认队列、补充说明这类会变的东西都塞在这里，
+ * 系统提示词才能保持字节稳定、命中缓存。
+ */
+function turnContent(
+	ctx: VoiceContext,
+	instruction: string,
+	images: string[],
+	pending: PendingOp[],
+	note?: string,
+	shots: string[] = []
+): MessageContent {
+	const noteLine = ctx.file
+		? F.line(`【当前笔记：${ctx.file.path}】`, `[current note: ${ctx.file.path}]`)
+		: F.line("【当前笔记：没有打开任何笔记】", "[current note: none open]");
+	// 图片是存进库的文件，模型必须知道路径才能用 ![[…]] 引用；否则它只会写「这里有一张图」
+	const shotLine = shots.length
+		? F.line(
+				`【这次带的 ${shots.length} 张图已经存进库里：${shots.join("、")}。写笔记时要按需用 ![[${shots[0]}]] 这样的完整路径把图嵌进正文，不要只写「这里有一张图」】`,
+				`[The ${shots.length} attached image(s) are already saved in the vault: ${shots.join(", ")}. Embed them in the note with ![[<path>]] exactly as given — never just say an image exists.]`
+		  )
+		: "";
+	const queueLine = pending.length
+		? F.line(
+				`【确认队列里已有 ${pending.length} 条待执行，不要重复准备】`,
+				`[${pending.length} action(s) already queued — do not prepare them again]`
+		  )
+		: "";
+	const head = [noteLine, shotLine, queueLine, note ?? "", instruction.trim()].filter((line) => !!line).join("\n");
+
+	return images.length
+		? [
+				{ type: "text", text: head },
+				...images.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "high" as const } })),
+		  ]
+		: head;
+}
+
+/**
+ * 历史裁剪：从整轮的开头切，绝不把 tool 回灌单独留在最前面
+ * （tool 消息必须紧跟带 tool_calls 的 assistant，否则接口直接报错）。
+ */
+function trimHistory(state: AgentState): void {
+	const msgs = state.messages;
+	if (msgs.length <= MAX_HISTORY_MESSAGES) return;
+	// 系统提示词永远留着，所以按「总数减一」算要丢多少
+	let cut = msgs.length - (MAX_HISTORY_MESSAGES - 1);
+	while (cut < msgs.length && msgs[cut].role === "tool") cut++;
+	const system = msgs[0];
+	state.messages = [system, ...msgs.slice(cut)];
 }
 
 /**
@@ -454,36 +519,58 @@ export async function runAgent(
 	const images = (options.images ?? []).filter((url) => !!url);
 	const pending = (options.pending ?? []).slice(0, MAX_PENDING);
 
-	// 会变的东西都放在用户消息里：系统提示词保持字节稳定，缓存才命中
-	const noteLine = ctx.file
-		? F.line(`【当前笔记：${ctx.file.path}】`, `[current note: ${ctx.file.path}]`)
-		: F.line("【当前笔记：没有打开任何笔记】", "[current note: none open]");
-	const queueLine = pending.length
-		? F.line(
-				`【确认队列里已有 ${pending.length} 条待执行，不要重复准备】`,
-				`[${pending.length} action(s) already queued — do not prepare them again]`
-		  )
-		: "";
-	const head = [noteLine, queueLine, instruction.trim()].filter((line) => !!line).join("\n");
-
-	const content: MessageContent = images.length
-		? [
-				{ type: "text", text: head },
-				...images.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "high" as const } })),
-		  ]
-		: head;
-
 	const state: AgentState = {
 		messages: [
 			{ role: "system", content: buildSystemPrompt(settings, images.length > 0) },
-			{ role: "user", content },
+			{ role: "user", content: turnContent(ctx, instruction, images, pending, undefined, options.shots ?? []) },
 		],
 		pending,
 		steps: [],
 		hasImages: images.length > 0,
 		usage: { ...EMPTY_USAGE },
 		seen: new Set<string>(),
+		turns: 1,
 	};
+	return runLoop(app, settings, state, options.onStep);
+}
+
+export interface AgentFollowUpOptions extends AgentOptions {
+	/** 这一句带的图片（data URL） */
+	images?: string[];
+	/** 这一句带的图片在库里的路径 */
+	shots?: string[];
+	/** 需要补充告诉模型的背景，例如上一批写操作已经执行或已被丢弃 */
+	note?: string;
+}
+
+/**
+ * 接着说一句：沿用同一段对话，把用户的新消息追加在后面继续跑。
+ * 这是「持续对话」的关键 —— 上面的回答、读过的笔记、查过的网页都还在上下文里，
+ * 用户不用把背景再讲一遍，也不会像重新执行那样从零开始。
+ */
+export async function followUpAgent(
+	app: App,
+	settings: DeepSeekVoiceSettings,
+	state: AgentState,
+	ctx: VoiceContext,
+	instruction: string,
+	options: AgentFollowUpOptions = {}
+): Promise<AgentRunResult> {
+	const images = (options.images ?? []).filter((url) => !!url);
+	if (!instruction.trim() && !images.length) {
+		throw new Error(F.line("指令是空的。", "The instruction is empty."));
+	}
+
+	state.messages.push({
+		role: "user",
+		content: turnContent(ctx, instruction, images, state.pending, options.note, options.shots ?? []),
+	});
+	// 新一轮重新允许读同样的笔记 / 搜同样的词：上一轮的结果可能已经过时
+	state.seen = new Set<string>();
+	state.turns = (state.turns ?? 1) + 1;
+	if (images.length) state.hasImages = true;
+	trimHistory(state);
+
 	return runLoop(app, settings, state, options.onStep);
 }
 
@@ -496,6 +583,7 @@ export async function continueAgent(
 ): Promise<AgentRunResult> {
 	return runLoop(app, settings, state, options.onStep);
 }
+
 
 /** 用户点了「执行」之后，真正落盘 */
 export async function commitAgent(app: App, pending: PendingOp[]): Promise<string[]> {

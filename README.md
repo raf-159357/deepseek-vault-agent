@@ -58,11 +58,11 @@ The agent has nine tools: search notes, list folders, read a note, web search, r
 
 **Photos — framed before they are used**
 
-Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on iOS and Android that is the real camera. The shot is resized to 1400 px and then a framing layer opens: drag the four corners, or drag the frame itself, until only the slide on the projector is inside and the classroom around it is not. **Only what is inside the frame is sent to the model.** Tick *Also save into the note* and the same crop is written into the vault as an attachment with `![[…]]` at the cursor — showing the slide in the note instead of a description of it. Tap a thumbnail to frame it again; the original is kept, so re-cropping never stacks compression.
+Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on iOS and Android that is the real camera. The shot is resized to 1400 px and then a framing layer opens: drag the four corners, or drag the frame itself, until only the slide on the projector is inside and the classroom around it is not. **Only what is inside the frame is sent to the model.** Tick *Also save into the note* and the same crop is written into the vault as an attachment with `![[…]]` at the cursor — showing the slide in the note instead of a description of it. Tap a thumbnail to frame it again; the original is kept, so re-cropping never stacks compression. The saved path is also passed to the model, so when it writes or rewrites a note it can embed `![[…]]` itself instead of describing the photo. A shot is saved even when no note is open — there is always a file to point at — and re-framing overwrites the same file, so the embed and the model never disagree.
 
 Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
 
-## Status: what works, what doesn't (0.7.1)
+## Status: what works, what doesn't (0.7.2)
 
 Written down honestly, because a marketplace listing that over-promises is worse than a short one.
 
@@ -76,6 +76,7 @@ Written down honestly, because a marketplace listing that over-promises is worse
 - Photos: camera or photo library, up to 4 per message, **cropped to the part you keep** — only the framed area is sent, and it can be saved into the note as an attachment.
 - Nine tools, 8 steps by default (cap 24), 24 queued writes per run, 200k characters per write.
 - When the step budget or the 8-minute wall clock runs out, **Keep going** resumes the same conversation instead of starting over.
+- **Follow-up turns.** Ask, read the answer, then just say the next thing: the previous question, the answer, the notes it read and the pages it opened stay in context. Every reply carries **Ask a follow-up** next to *Copy*; applying the queued writes no longer ends the thread; and closing the dialog and opening it again picks the same conversation back up mid-thread.
 - The confirmation queue is written to disk, so a phone that kills the app does not throw away ten prepared edits.
 - Cache-aware prompts: the system prompt and tool schema stay byte-identical between runs, the document you are editing sits in its own stable message, and repeated reads in one run are answered from what the model already has. Each answer reports the hit rate and what it cost.
 - Settings show a running tally: requests, cache hit rate of all input, money spent, money saved.
@@ -87,7 +88,7 @@ Written down honestly, because a marketplace listing that over-promises is worse
 - **No background work.** Nothing runs while Obsidian is closed. iOS will not wake the app on a schedule, so "every morning at 8" has to be an iOS Shortcuts automation that opens the URI.
 - **No email inbox.** Gmail needs OAuth and raw sockets; the Obsidian WebView gives neither. The workaround is forwarding mail into a note or an RSS-to-note service, then running *read links in this note*.
 - **No streaming.** The answer arrives in one piece.
-- **No chat history / memory.** Each instruction starts clean; the dialog stays open so you can issue the next one, but nothing is remembered between runs.
+- **No memory across sessions.** A thread survives closing the dialog, but not restarting Obsidian, and nothing is remembered across days. *New chat* throws it away on purpose.
 - **No semantic search.** Keyword search over filenames and body text — no embeddings.
 - **No custom prompt per tool.** One system prompt, one extra-requirements box.
 

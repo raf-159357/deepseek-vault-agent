@@ -33,13 +33,15 @@ Language of the code and UI: English and Chinese (follows Obsidian's language se
 - Billing is per use, so stopping means stopping the cost. There is no subscription to cancel.
 - Optional donations (Alipay / WeChat Pay) are in the README. They are voluntary and unlock nothing.
 
-## Capabilities (0.7.0)
+## Capabilities (0.7.2)
 
 - Four voice modes: append, rewrite note, rewrite selection, new note. Preview before anything is written.
 - Agent mode with nine tools: search notes, list folders, read a note, web search, read a URL, write a note, create a folder, move/rename, and (off by default) move to trash.
 - Confirmation queue in front of every write; deletions go to the user's trash, never a hard delete.
 - Photos: camera or library, up to 4 per message, cropped in-app (drag four corners, 16:9 snap) — only the framed area is uploaded, and it can be saved into the note as an attachment with `![[…]]`.
 - Long tasks: 8 steps by default, up to 24 with *Keep going* resuming the same conversation; 8-minute wall clock; the queue is persisted so an app kill does not lose prepared edits.
+- Follow-up turns: after an answer, just say the next thing. The earlier question, the answer, notes read and pages opened stay in context; applying the queued writes does not end the thread; the thread survives closing the dialog (not restarting the app). *New chat* starts over.
+- Photos are saved into the vault with their path passed to the model, so it embeds `![[…]]` in the note it writes instead of describing the image.
 - Mobile entry points: floating button (tap = instruction, long-press = voice), Back Tap, lock-screen widget, Action button, Shortcuts automation, URI scheme `obsidian://vaultagent`.
 - Cache-aware prompting: stable prefix, per-note document message, duplicate reads answered by pointer. Every answer reports cache hit rate and cost.
 
@@ -48,7 +50,7 @@ Language of the code and UI: English and Chinese (follows Obsidian's language se
 - No background jobs: nothing runs while Obsidian is closed; iOS will not wake the app on a schedule.
 - No email access: no OAuth, no raw sockets in the WebView.
 - No streaming output; answers arrive in one piece.
-- No chat memory between runs, no semantic/vector search.
+- No memory across app restarts and no memory across days; no semantic/vector search.
 - Vision requires `deepseek-flash`; a photo request switches to it automatically.
 - English UI text is a translation of Chinese-first copy.
 
@@ -64,6 +66,6 @@ Language of the code and UI: English and Chinese (follows Obsidian's language se
 - 免费、MIT 的 Obsidian 插件，把 DeepSeek 智能体放进 iPhone / 安卓 / 桌面的 Obsidian：说一句或打一句，它搜库、读链接、写笔记，写操作全部先确认。
 - 手机优先：没有服务器、没有本地桥接、没有配套 App。
 - 自带 DeepSeek API Key；插件免费，按 token 付费，一条语音笔记约 ¥0.01，重度自用一个月十几块。
-- 0.7.0 支持拍照后就地框选（只上传框内内容，可存进笔记）、24 步长任务、待确认队列落盘。
-- 做不到：后台运行、收邮件、流式输出、对话记忆、语义搜索。
+- 0.7.2 支持接着说（同一条对话里继续问，执行完写操作也不断）、拍照就地框选并让模型用 ![[…]] 把图嵌进笔记、24 步长任务、待确认队列落盘。
+- 做不到：后台运行、收邮件、流式输出、跨重启/跨天的记忆、语义搜索。
 - 反馈：renafu159357@163.com，或 README 里的微信二维码。捐助完全自愿。

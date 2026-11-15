@@ -86,6 +86,8 @@ export interface AgentState {
 	usage: Usage;
 	/** 本次运行里已经调用过的只读工具指纹，重复调用直接复用，不再花一次 token */
 	seen?: Set<string>;
+	/** 这段对话进行到第几轮（用户说了几句话）；续跑不增加，接着说才增加 */
+	turns?: number;
 }
 
 /** 从相机或相册拿到、已经压好尺寸的图片 */
@@ -99,6 +101,8 @@ export interface PickedImage {
 	original?: string;
 	/** 当前这张图用的框选范围；没有就是整张 */
 	crop?: CropRect;
+	/** 存进库之后的路径；有它模型才能在写笔记时用 ![[…]] 引用这张图 */
+	savedPath?: string;
 }
 
 /** 框选范围，按图片宽高归一化到 0–1，换设备、换缩放都不受影响 */

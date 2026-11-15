@@ -1,6 +1,6 @@
 # Marketplace submission sheet / 上架提交材料
 
-Everything needed to submit version **0.7.1**
+Everything needed to submit version **0.7.2**
 
 - Cache work that goes beyond "we put the static part first": the note being edited now lives in its own message so repeated edits of the same note hit cache from the second pass; duplicate reads inside one run are answered with a pointer instead of the text; tool output is capped at 9k characters keeping the tail, because it is re-sent on every later step.
 - Settings show a running tally (requests, cache hit rate of all input, spent, saved) with a reset.
@@ -19,8 +19,8 @@ Everything needed to submit version **0.7.1**
 - Floating button on mobile: tap for an AI instruction, long-press for a voice note, draggable.
 - Model replies follow the language of the instruction.
 
-**0.3.2** at <https://community.obsidian.md>.
-提交 0.3.2 时，门户上要填的内容都在这份文件里，中英对照。
+**0.7.2** at <https://community.obsidian.md>.
+上一版（0.7.1）已通过门户进目录，这次发布 0.7.2 只改版本号与变更说明，门户里点 **Check for updates** 即可。
 
 ---
 
@@ -46,7 +46,7 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 | Field | Value |
 | --- | --- |
 | Repository | `raf-159357/deepseek-vault-agent` |
-| Release / tag | `0.3.2` (no `v` prefix) |
+| Release / tag | `0.7.2` (no `v` prefix) |
 | Release assets | `main.js`, `manifest.json`, `styles.css` only |
 | Plugin ID | `deepseek-vault-agent` |
 | Min app version | `1.7.2` |
@@ -106,6 +106,16 @@ Rules this satisfies: ≤ 250 characters, sentence case, ends with a period, the
 ---
 
 ## 4. Changelog for this submission / 本次提交的变更
+
+**0.7.2**
+
+- **Follow-up turns.** The dialog used to end each run with nothing but *Copy answer*: sending another line started a brand new conversation, so the previous answer, the notes it read and the pages it searched were all gone. Typing now continues the same thread — the previous turn's question and answer stay in context, and every reply offers **Ask a follow-up** next to *Copy*. A *New chat* control in the header starts over when you want to.
+- **Nothing is thrown away after applying.** Running the queued writes used to clear the conversation; it no longer does, and the model is told the actions landed so it will not prepare them again.
+- **The thread survives closing the dialog** (until Obsidian restarts). Reopening it picks the conversation up and says what turn it is on.
+- **History cap.** A long thread keeps the system prompt plus the last 48 messages, cutting at a turn boundary so a tool result is never left without its call.
+- **Images can now actually be referenced.** A photo taken or picked was saved into the vault, but the model was never told where — so when it wrote the note it could only say "here is an image" instead of embedding it. The path is now passed with the turn (`![[…]]` included), and `write_note` says to embed rather than describe.
+- Photos are saved even when no note is open (previously the file was never written, so there was nothing to reference); re-framing a photo overwrites the same file, so the embed and what the model sees stay the same image.
+- Tool results and images now stay consistent across follow-up turns: read de-duplication resets each turn, and a conversation that started with a photo keeps using the vision model.
 
 **0.7.1**
 
@@ -181,16 +191,16 @@ Or do it by hand at <https://github.com/raf-159357/deepseek-vault-agent/releases
 
 | Field | Value |
 | --- | --- |
-| Tag | `0.7.1` — no `v`, must equal `manifest.json` `version` |
+| Tag | `0.7.2` — no `v`, must equal `manifest.json` `version` |
 | Target | `main` |
-| Title | `0.7.1` |
+| Title | `0.7.2` |
 | Assets | exactly these three, names unchanged: `main.js`, `manifest.json`, `styles.css` |
 
 Anything else attached to the release (source zips are added automatically) is ignored, but do not attach a second `main.js`.
 
 ### 6.2 Then on the portal / 然后回门户
 
-1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.7.1`.
+1. Open the plugin page → **Check for updates** (top right of Reviews). This re-runs the scan against the newest release; the header should switch from `0.3.1` to `0.7.2`.
 2. Nothing else to submit. The listing text comes from `manifest.json`; the categories and payment choice were already set on the first submission.
 3. Only **Error** blocks a release. **Recommendation** and **Warning** do not — the three entries currently shown (release attestation, vault enumeration, clipboard) are all Recommendations, and two of them are answered in section 3 above.
 4. Do not press **Archive** in the `…` menu: that takes the plugin off the list and the whole submission has to start over.

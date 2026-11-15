@@ -165,7 +165,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  */
 export async function cropImage(base: string, rect: CropRect, prev: PickedImage): Promise<PickedImage> {
 	const safe = clampRect(rect);
-	if (isFull(safe) && prev.original === base) return { ...prev, dataUrl: base, bytes: bytesOfDataUrl(base), crop: FULL_RECT };
+	if (isFull(safe) && prev.original === base)
+		return { ...prev, dataUrl: base, bytes: bytesOfDataUrl(base), crop: FULL_RECT };
 
 	const img = await loadImage(base);
 	const sourceW = img.naturalWidth || img.width;
@@ -196,5 +197,7 @@ export async function cropImage(base: string, rect: CropRect, prev: PickedImage)
 		height: out.h,
 		original: base,
 		crop: safe,
+		// 重裁不换文件位置，路径得跟着走，正文里的引用才不会断
+		savedPath: prev.savedPath,
 	};
 }

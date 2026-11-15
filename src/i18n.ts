@@ -100,6 +100,13 @@ const S = {
 	},
 	amRun: { zh: "执行", en: "Run" },
 	amRunning: { zh: "处理中…", en: "Working…" },
+	amSend: { zh: "接着说", en: "Send" },
+	amAsk: { zh: "接着问", en: "Ask a follow-up" },
+	amNewChat: { zh: "新对话", en: "New chat" },
+	amPlaceholderNext: {
+		zh: "接着说：改哪里、再查什么、换个写法…",
+		en: "Say what is next — change it, dig deeper, try another angle…",
+	},
 	amClose: { zh: "关闭", en: "Close" },
 	amEmpty: { zh: "先说清楚要它做什么。", en: "Say what it should do first." },
 	amCommit: { zh: "执行这些操作", en: "Run these actions" },
@@ -353,6 +360,18 @@ export const F = {
 			: "识图要用 deepseek-flash，这次请求临时改用它的（你选的模型不支持看图）。",
 	photos: (n: number): string => (lang === "en" ? `${n} image${n === 1 ? "" : "s"}` : `${n} 张图`),
 	shotSaved: (path: string): string => (lang === "en" ? `Saved to “${path}”` : `已存进笔记：${path}`),
+	shotSavedNoNote: (path: string): string =>
+		lang === "en"
+			? `Saved to “${path}”. No note was open, so nothing was inserted — the assistant can still embed it.`
+			: `已存进库：${path}。当前没打开笔记，所以没有插进正文；让 AI 写笔记时它会自己引用这张图。`,
+	shotSaveFail: (): string =>
+		lang === "en"
+			? "Could not save the image into the vault — the assistant can still see it, but cannot embed it."
+			: "图片没存进库，这次 AI 能看到它，但没办法在笔记里引用。检查一下附件目录设置。",
+	shotOffHint: (): string =>
+		lang === "en"
+			? "Saving is off, so this photo is sent to the model only and cannot be embedded in a note. Turn on “Save the framed photo into the note” in settings."
+			: "「框完存进笔记」是关着的：这张图只发给了模型，没法在笔记里引用。想让它写进笔记，请在设置里打开这一项。",
 	shotNoNote: (): string =>
 		lang === "en"
 			? "No note is open, so the photo was only sent to the model — nothing was saved."
@@ -389,6 +408,39 @@ export const F = {
 		lang === "en"
 			? `${n} action${n === 1 ? "" : "s"} from last time never got applied. Apply them, or discard.`
 			: `上次还有 ${n} 个写操作没执行。可以现在执行，或者丢弃。`,
+
+	// —— 持续对话 ——
+	turns: (n: number): string => (lang === "en" ? `Thread · turn ${n}` : `对话 · 第 ${n} 轮`),
+	turnsHint: (n: number): string =>
+		lang === "en"
+			? `Thread · turn ${n} — it still remembers what came before`
+			: `对话 · 第 ${n} 轮 · 它记得前面说过什么`,
+	resumed: (n: number): string =>
+		lang === "en"
+			? `Picked up the thread from last time (turn ${n}). Tap New chat to start over.`
+			: `接着上次的对话（第 ${n} 轮）。想从头开始就点「新对话」。`,
+	newChatStarted: (): string => (lang === "en" ? "New thread started" : "已开始新对话"),
+	newChatKept: (n: number): string =>
+		lang === "en"
+			? `New thread started. The ${n} action${n === 1 ? "" : "s"} prepared earlier are still queued.`
+			: `已开始新对话。之前准备的 ${n} 个写操作还在队列里。`,
+	appliedContinue: (n: number): string =>
+		lang === "en"
+			? `${n} action${n === 1 ? "" : "s"} applied. Say what is next — it keeps the context.`
+			: `已执行 ${n} 个操作。接着说下一步就行，上文还在。`,
+	appliedForModel: (n: number): string =>
+		lang === "en"
+			? `[The user confirmed the previous ${n} action(s): they are now on disk. Do not prepare them again.]`
+			: `【用户已确认并执行了上一批 ${n} 个写操作，文件已落盘，不要再重复准备】`,
+	discardedForModel: (n: number): string =>
+		lang === "en"
+			? `[The user discarded the previous ${n} queued action(s); nothing was written.]`
+			: `【用户丢弃了上一批 ${n} 个待确认操作，没有写入磁盘】`,
+	discardedContinue: (n: number): string =>
+		lang === "en"
+			? `Discarded ${n} action${n === 1 ? "" : "s"}. The thread carries on.`
+			: `已丢弃 ${n} 个待确认操作，对话继续。`,
+	you: (): string => (lang === "en" ? "You" : "你"),
 
 	// —— 落盘结果 ——
 	writeDone: (n: number): string => (lang === "en" ? `Wrote ${n} characters` : `已写入 ${n} 字`),
