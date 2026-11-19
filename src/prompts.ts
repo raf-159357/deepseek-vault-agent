@@ -15,7 +15,7 @@ function truncateMiddle(text: string, max: number): string {
 	return `${text.slice(0, head)}\n\n…（中间省略 ${text.length - max} 字）…\n\n${text.slice(-tail)}`;
 }
 
-export function buildSystemPrompt(settings: DeepSeekVoiceSettings): string {
+export function buildSystemPrompt(settings: DeepSeekVoiceSettings, skillBlock?: string): string {
 	const extra = settings.extraSystemPrompt.trim();
 	return [
 		"你是一个 Obsidian 笔记助手，由手机语音指令调用。用户的话来自语音识别，可能有同音错字、断句混乱、口语赘词，先按上下文合理纠正，但不要凭猜测补充事实。",
@@ -37,6 +37,7 @@ export function buildSystemPrompt(settings: DeepSeekVoiceSettings): string {
 		"5. 不确定的信息写进 notes，绝不编造人名、数字、日期、文献或引用。",
 		"6. 中文输入输出中文；用户用其他语言时跟随用户。",
 		extra ? `7. 额外要求：${extra}` : "",
+		skillBlock ? `\n${skillBlock}` : "",
 	]
 		.filter((line) => line !== "")
 		.join("\n");

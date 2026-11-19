@@ -1,6 +1,8 @@
+import type { SkillMine } from "./skills";
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type DeepSeekVoicePlugin from "./main";
 import { chatCompletion } from "./deepseek";
+import { SKILLS } from "./skills";
 import { F, s, setLang, isEn } from "./i18n";
 import type { VoiceMode } from "./types";
 import { AGENT_STEP_LIMIT } from "./types";
@@ -36,6 +38,9 @@ export interface DeepSeekVoiceSettings {
 	/** —— 0.7：拍照后框选，以及裁好的图是否落进笔记 —— */
 	cropShot: boolean;
 	shotToNote: boolean;
+	/** —— 0.8：技能包。currentSkillId 记住上次选的，skillMine 只存用户自己写的那部分 —— */
+	currentSkillId: string;
+	skillMine: Record<string, SkillMine>;
 }
 
 export interface CacheStats {
@@ -76,6 +81,8 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	cacheStats: { ...EMPTY_STATS },
 	cropShot: true,
 	shotToNote: true,
+	currentSkillId: "journal",
+	skillMine: {},
 };
 
 /** 老版本的数据里没有 cacheStats，补一个默认值，避免读 undefined */
@@ -85,6 +92,9 @@ export function normalizeSettings(data: Partial<DeepSeekVoiceSettings>): DeepSee
 	// 0.7 新增：老数据里没有这两项，默认都算开启
 	merged.cropShot = data.cropShot !== false;
 	merged.shotToNote = data.shotToNote !== false;
+	// 0.8 新增：老数据没有技能字段，给一个默认技能
+	merged.currentSkillId = typeof data.currentSkillId === "string" ? data.currentSkillId : "journal";
+	merged.skillMine = data.skillMine && typeof data.skillMine === "object" ? data.skillMine : {};
 	return merged;
 }
 
@@ -282,6 +292,23 @@ export class VoiceNotesSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			});
 		});
+
+		new Setting(containerEl)
+			.setName(isEn() ? "Function" : "功能")
+			.setDesc(
+				isEn()
+					? "Which function runs by default: study breakdown, paper breakdown, or journal."
+					: "默认用哪个功能跑：学习拆解 / 文献拆解 / 手帐打卡。切换后立刻生效，下次打开还是它。"
+			)
+			.addDropdown((dd) => {
+				for (const sk of SKILLS) {
+					dd.addOption(sk.id, isEn() ? sk.id : `${sk.icon} · ${sk.name}`);
+				}
+				dd.setValue(this.plugin.settings.currentSkillId).onChange(async (value) => {
+					this.plugin.settings.currentSkillId = value;
+					await this.plugin.saveSettings();
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(t("setConfirmName"))

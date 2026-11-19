@@ -2,6 +2,7 @@ import { App, Modal, Notice, setIcon } from "obsidian";
 import type DeepSeekVoicePlugin from "../main";
 import { ApiError, supportsVision, transcribe } from "../deepseek";
 import { commitAgent, continueAgent, followUpAgent, runAgent } from "../agent";
+import { buildSkillPrompt, getSkill } from "../skills";
 import { describeOp } from "../vault-tools";
 import { WavRecorder } from "../audio";
 import { cropImage, pickImage } from "../image";
@@ -444,6 +445,9 @@ export class AgentModal extends Modal {
 			const images = this.images.map((img) => img.dataUrl);
 			const shots = this.images.map((img) => img.savedPath).filter((p): p is string => !!p);
 			const onStep = (step: AgentStep): void => this.addStep(step);
+			// 当前功能（学 / 文 / 帐）合成的提示词块：基座 + 用户的补充
+			const skill = getSkill(this.plugin.settings.currentSkillId);
+			const skillBlock = buildSkillPrompt(skill, this.plugin.settings.skillMine?.[skill.id]);
 			// 已经在对话里就接着说（上文都在），没有才新开一段
 			const result = state
 				? await followUpAgent(this.app, this.plugin.settings, state, this.ctx, instruction, {
@@ -451,12 +455,14 @@ export class AgentModal extends Modal {
 						shots,
 						note,
 						onStep,
+						skillBlock,
 				  })
 				: await runAgent(this.app, this.plugin.settings, this.ctx, instruction, {
 						images,
 						shots,
 						pending: this.pending,
 						onStep,
+						skillBlock,
 				  });
 
 			// 图已经发出去了，清掉缩略图，免得下一句又带同一张

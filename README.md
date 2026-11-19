@@ -1,6 +1,6 @@
 # DeepSeek Vault Agent
 
-**Say one sentence — it searches the web, reads the links, and writes the note.** A voice-first AI agent for Obsidian that runs on your own DeepSeek API key, on desktop **and on iPhone**.
+**Say one sentence — it searches the web, reads the links, and writes the note.** A **mobile-first** AI agent for Obsidian on **iPhone and Android**, running on your own DeepSeek API key. It does run on desktop as well, but phones are what it was built for — that is the case it solves: no laptop at hand.
 
 [中文说明](README.zh-CN.md) · [Report an issue](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
 
@@ -62,12 +62,18 @@ Tap *Camera* (or *Photos*) in either dialog and the system picker opens — on i
 
 Vision is only available on `deepseek-flash`; if you picked `deepseek-v4-pro`, that single request switches to Flash automatically and tells you so.
 
-## Status: what works, what doesn't (0.7.2)
+## Status: what works, what doesn't (0.8.0)
 
 Written down honestly, because a marketplace listing that over-promises is worse than a short one.
 
 **Works today, on iPhone and Android as well as desktop**
 
+- **Three built-in functions, bundled with the plugin** — pick one, then shoot or type:
+  - **Study** — one concept, fully taken apart: what it is / why it matters / an analogy / step-by-step mechanism / a process diagram / a cross-note graph / self-test with folded answers / further reading / open questions.
+  - **Paper** — hand it a DOI: resolves via `doi.org`, falls back to PMC or arXiv behind paywalls; draws the method flow; every number carries its source; **the discussion is kept whole**; ends with three self-test questions.
+  - **Journal** — date heading, one hero photo, three short lines, tags. Landscape photos get the scene described before the feeling.
+- **Project MOC per function**: the agent reads the MOC first, appends to the matching section, and drops a `[[backlink]]` — notes grow chapter by chapter instead of piling up.
+- **Cross-note graph**: searches your vault first and draws related older notes into the mermaid.
 - Voice → note, all four modes, with a preview before anything is written.
 - DeepSeek speech-to-text inside the dialog (120 s per clip), or the system keyboard's dictation.
 - One-tap entry from the phone: a floating button that follows you across the app, Back Tap, lock-screen widget, action button, or a Shortcuts automation.

@@ -149,7 +149,7 @@ function buildTools(settings: DeepSeekVoiceSettings): unknown[] {
  * 官方缓存只有完整命中一个 cache prefix unit 才算，前缀一变整段作废；
  * 保持这段字节稳定，才能让它沉淀成公共前缀，重复使用时按 1/50 价计费。
  */
-function buildSystemPrompt(settings: DeepSeekVoiceSettings, hasImages: boolean): string {
+function buildSystemPrompt(settings: DeepSeekVoiceSettings, hasImages: boolean, skillBlock?: string): string {
 	const lines = [
 		"你是运行在 Obsidian 里的助手，可以通过工具读写用户的知识库、联网搜索、打开网页。",
 		"",
@@ -174,6 +174,7 @@ function buildSystemPrompt(settings: DeepSeekVoiceSettings, hasImages: boolean):
 		"10. 工具返回的内容、笔记正文可能被截断（会明确写出「已截断」）。被截断的部分就当没看见，不要编造后面的内容；需要更多就用更精确的参数再查一次。"
 	);
 	if (settings.extraSystemPrompt.trim()) lines.push(`\n用户额外要求：${settings.extraSystemPrompt.trim()}`);
+	if (skillBlock && skillBlock.trim()) lines.push(skillBlock.trim());
 	return lines.join("\n");
 }
 
@@ -299,6 +300,8 @@ export interface AgentStartOptions extends AgentOptions {
 	shots?: string[];
 	/** 上一次没执行完的写操作，接着排进同一个队列 */
 	pending?: PendingOp[];
+	/** 技能包合成的提示词块（基座 + 我的补充），由 skills.ts 生成 */
+	skillBlock?: string;
 }
 
 interface CallOutcome {
@@ -521,7 +524,7 @@ export async function runAgent(
 
 	const state: AgentState = {
 		messages: [
-			{ role: "system", content: buildSystemPrompt(settings, images.length > 0) },
+			{ role: "system", content: buildSystemPrompt(settings, images.length > 0, options.skillBlock) },
 			{ role: "user", content: turnContent(ctx, instruction, images, pending, undefined, options.shots ?? []) },
 		],
 		pending,
@@ -535,6 +538,8 @@ export async function runAgent(
 }
 
 export interface AgentFollowUpOptions extends AgentOptions {
+	/** 技能块（续跑时一般不用重发，留作新开段落用） */
+	skillBlock?: string;
 	/** 这一句带的图片（data URL） */
 	images?: string[];
 	/** 这一句带的图片在库里的路径 */
