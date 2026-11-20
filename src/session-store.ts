@@ -25,7 +25,7 @@ function sessionPath(app: App, pluginId: string): string {
 function stripMessage(msg: AgentMessage): AgentMessage {
 	const content = msg.content;
 	if (typeof content === "string") {
-		return { ...msg, content: content.slice(0, MAX_MSG_CHARS) } as AgentMessage;
+		return { ...msg, content: content.slice(0, MAX_MSG_CHARS) };
 	}
 	if (!Array.isArray(content)) return msg;
 	const parts = content.map((part) => {
@@ -68,7 +68,7 @@ export async function loadSession(app: App, pluginId: string): Promise<AgentStat
 			await clearSession(app, pluginId);
 			return null;
 		}
-		const messages = asArray(rec.messages) as AgentMessage[];
+		const messages = asArray(rec.messages);
 		if (!messages.length) return null;
 		return {
 			messages,

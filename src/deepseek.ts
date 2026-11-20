@@ -248,14 +248,14 @@ export async function postJson(
 		} catch (err) {
 			lastErr = err instanceof Error ? err.message : String(err);
 			if (attempt < RETRY_DELAYS.length) {
-				await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+				await new Promise((r) => window.setTimeout(r, RETRY_DELAYS[attempt]));
 				continue;
 			}
 			throw new ApiError(F.netFail(lastErr));
 		}
 		// 5xx 和 429 值得重试；4xx 是请求本身的问题，重试也没用
 		if ((res.status >= 500 || res.status === 429) && attempt < RETRY_DELAYS.length) {
-			await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+			await new Promise((r) => window.setTimeout(r, RETRY_DELAYS[attempt]));
 			continue;
 		}
 		break;

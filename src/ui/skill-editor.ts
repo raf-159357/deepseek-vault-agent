@@ -56,7 +56,7 @@ export class SkillMineModal extends Modal {
 			});
 		}
 
-		contentEl.createEl("div", { cls: "dsv-skilledit-label", text: "再补充几句（可选）" });
+		contentEl.createDiv({ cls: "dsv-skilledit-label", text: "再补充几句（可选）" });
 		const area = contentEl.createEl("textarea", { cls: "dsv-skilledit-area" });
 		area.placeholder = "例如：我是临床医学大二，解剖名词一律标英文缩写；笔记不要超过 400 字。";
 		area.value = mine.extraPrompt;
