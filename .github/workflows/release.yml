@@ -21,13 +21,15 @@ jobs:
         run: |
           set -e
           V=$(node -p "require('./manifest.json').version")
-          TITLE="$V — 三个功能选项，随插件打包"
+          TITLE="$V"
+          NOTES="docs/release-notes-$V.md"
+          if [ ! -f "$NOTES" ]; then NOTES="CHANGELOG.md"; fi
           echo "version=$V"
           if gh release view "$V" --repo "$REPO" >/dev/null 2>&1; then
             echo "existing draft/release found, filling it"
-            gh release edit "$V" --repo "$REPO" --draft=false --latest --title "$TITLE" --notes-file docs/release-notes-0.8.0.md
+            gh release edit "$V" --repo "$REPO" --draft=false --latest --title "$TITLE" --notes-file "$NOTES"
             gh release upload "$V" --repo "$REPO" --clobber main.js manifest.json styles.css
           else
-            gh release create "$V" --repo "$REPO" --target "$SHA" --title "$TITLE" --notes-file docs/release-notes-0.8.0.md --latest main.js manifest.json styles.css
+            gh release create "$V" --repo "$REPO" --target "$SHA" --title "$TITLE" --notes-file "$NOTES" --latest main.js manifest.json styles.css
           fi
           gh release view "$V" --repo "$REPO" --json tagName,isDraft,assets

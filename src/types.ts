@@ -73,7 +73,7 @@ export interface AgentStep {
 }
 
 /** 停下来时的原因：正常答完 / 步数用完 / 到时间上限（都可以「继续跑」） */
-export type StopReason = "done" | "steps" | "time";
+export type StopReason = "done" | "steps" | "time" | "paused" | "aborted";
 
 /** 一次任务的完整状态，留着它就能接着往下跑（手机上 App 被杀也不至于全丢） */
 export interface AgentState {
@@ -88,6 +88,10 @@ export interface AgentState {
 	seen?: Set<string>;
 	/** 这段对话进行到第几轮（用户说了几句话）；续跑不增加，接着说才增加 */
 	turns?: number;
+	/** 上一次为什么停下来：done / steps / time / paused / aborted */
+	stopReason?: StopReason;
+	/** 这段会话用的技能块，恢复时一起带回来 */
+	skillBlock?: string;
 }
 
 /** 从相机或相册拿到、已经压好尺寸的图片 */

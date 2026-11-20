@@ -22,6 +22,8 @@ import { addUsage, EMPTY_USAGE } from "./usage";
 const MAX_PENDING = 24;
 /** 步数硬上限，设置里最多也只能拉到这个数 */
 const MAX_STEPS = AGENT_STEP_LIMIT;
+/** 不设步数上限时的兜底，防止模型自己绕圈把额度烧光 */
+const SOFT_MAX_STEPS = 200;
 /** 单次运行的墙钟上限：手机息屏/切后台容易被打断，超时就停下来等用户点继续 */
 const TIME_LIMIT_MS = 8 * 60 * 1000;
 /** 这几个只读、彼此不影响，可以并发跑 */
@@ -291,6 +293,10 @@ async function runTool(
 export interface AgentOptions {
 	/** 每完成一步（工具执行完）回调一次，界面用来实时显示进度 */
 	onStep?: (step: AgentStep) => void;
+	/** 每一轮结束后问一次「要不要停」：用户点了暂停就返回 true */
+	shouldStop?: () => boolean;
+	/** 每一轮结束后把状态存一次盘，App 被杀也能接着跑 */
+	onCheckpoint?: (state: AgentState) => void;
 }
 
 export interface AgentStartOptions extends AgentOptions {
@@ -392,19 +398,30 @@ async function runLoop(
 	app: App,
 	settings: DeepSeekVoiceSettings,
 	state: AgentState,
-	onStep?: (step: AgentStep) => void
+	options: AgentOptions = {}
 ): Promise<AgentRunResult> {
+	const onStep = options.onStep;
 	const tools = buildTools(settings);
-	const maxSteps = Math.max(1, Math.min(MAX_STEPS, Number(settings.agentMaxSteps) || 8));
+	// 步数不再是「跑几轮就断」的硬闸：0 表示不设限，只在 SOFT_MAX 处兜底防跑飞
+	const configured = Number(settings.agentMaxSteps);
+	const maxSteps = !configured || configured <= 0 ? SOFT_MAX_STEPS : Math.min(SOFT_MAX_STEPS, configured);
 	const model = resolveModel(settings.model, state.hasImages);
-	const deadline = Date.now() + TIME_LIMIT_MS;
+	// 单次时长同样可关：0 = 不限，靠用户随时暂停
+	const limitMin = Number(settings.agentTimeLimitMin) || 0;
+	const deadline = limitMin > 0 ? Date.now() + limitMin * 60_000 : Number.POSITIVE_INFINITY;
 
 	let reply = "";
 	let stopped: StopReason = "steps";
 	let used = 0;
 
 	for (let round = 0; round < maxSteps; round++) {
-		// 手机上一次请求可能拖很久，到点就停，别让用户对着转圈等
+		// 用户点了暂停：把手头这一轮跑完就停，状态留着，随时能接着来
+		if (options.shouldStop?.()) {
+			stopped = "paused";
+			break;
+		}
+		// 每轮开始前存一次：即使这一轮跑到一半 App 被系统杀掉，也只需重跑当前这轮
+		options.onCheckpoint?.(state);
 		if (Date.now() > deadline) {
 			stopped = "time";
 			break;
@@ -451,6 +468,7 @@ async function runLoop(
 		reply += (reply ? "\n\n" : "") + (stopped === "time" ? F.timeUsed() : F.budgetUsed(used));
 	}
 
+	state.stopReason = stopped;
 	return { reply, steps: state.steps, pending: state.pending, stopped, state, usage: state.usage, model };
 }
 
@@ -534,7 +552,7 @@ export async function runAgent(
 		seen: new Set<string>(),
 		turns: 1,
 	};
-	return runLoop(app, settings, state, options.onStep);
+	return runLoop(app, settings, state, options);
 }
 
 export interface AgentFollowUpOptions extends AgentOptions {
@@ -576,7 +594,7 @@ export async function followUpAgent(
 	if (images.length) state.hasImages = true;
 	trimHistory(state);
 
-	return runLoop(app, settings, state, options.onStep);
+	return runLoop(app, settings, state, options);
 }
 
 /** 步数或时间到上限后接着跑：沿用原来的对话记录和待确认队列，不重新开始 */
@@ -586,7 +604,7 @@ export async function continueAgent(
 	state: AgentState,
 	options: AgentOptions = {}
 ): Promise<AgentRunResult> {
-	return runLoop(app, settings, state, options.onStep);
+	return runLoop(app, settings, state, options);
 }
 
 

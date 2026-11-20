@@ -2,7 +2,7 @@ import { App, Modal, Notice, setIcon } from "obsidian";
 import type DeepSeekVoicePlugin from "../main";
 import { ApiError, supportsVision, transcribe } from "../deepseek";
 import { commitAgent, continueAgent, followUpAgent, runAgent } from "../agent";
-import { buildSkillPrompt, getSkill } from "../skills";
+import { buildSkillPrompt, getSkill, SKILLS } from "../skills";
 import { describeOp } from "../vault-tools";
 import { WavRecorder } from "../audio";
 import { cropImage, pickImage } from "../image";
@@ -42,6 +42,9 @@ export class AgentModal extends Modal {
 	private recHint: HTMLElement | null = null;
 	private shotsEl: HTMLElement | null = null;
 	private shotBtns: HTMLButtonElement[] = [];
+	private paused = false;
+	/** 跑的时候用户又说了几句，按顺序排着，等这一轮结束接着发 */
+	private queue: string[] = [];
 	private stepsEl!: HTMLElement;
 	private stepsHead!: HTMLElement;
 	private resultEl!: HTMLElement;
@@ -62,6 +65,9 @@ export class AgentModal extends Modal {
 	/** 没存进库时只提醒一次，别每次加图都弹 */
 	private shotHinted = false;
 	private stepCount = 0;
+	/** 上传的文本附件，随下一条指令一起发 */
+	private fileCtx: { name: string; text: string } | null = null;
+	private fileChipEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: DeepSeekVoicePlugin, ctx: VoiceContext, options: AgentModalOptions = {}) {
 		super(app);
@@ -88,6 +94,8 @@ export class AgentModal extends Modal {
 			text: isEn() ? `${where} · web access · reads and writes this vault` : `${where} · 可联网 · 可读写本库`,
 		});
 		this.badgeEl = head.createDiv({ cls: "dsv-badge" });
+
+		this.buildFnBar(contentEl);
 
 		const chips = contentEl.createDiv({ cls: "dsv-chips" });
 		for (const text of s("amSamples").split("\n")) {
@@ -133,7 +141,14 @@ export class AgentModal extends Modal {
 		const closeBtn = footer.createEl("button", { cls: "dsv-btn-quiet", text: s("amClose") });
 		closeBtn.addEventListener("click", () => this.close());
 		this.runBtn = footer.createEl("button", { cls: "mod-cta dsv-btn-main", text: s("amRun") });
-		this.runBtn.addEventListener("click", () => void this.run());
+		this.runBtn.addEventListener("click", () => {
+			if (this.busy) {
+				this.paused = true;
+				this.runBtn.setText("正在暂停…");
+				return;
+			}
+			void this.run();
+		});
 
 		this.autoGrow();
 		this.adoptSession();
@@ -158,6 +173,59 @@ export class AgentModal extends Modal {
 		this.contentEl.empty();
 	}
 
+	/** 功能条：学 / 文 / 帐 / 其他，点一下即时切换，不用进设置 */
+	private buildFnBar(parent: HTMLElement): void {
+		const bar = parent.createDiv({ cls: "dsv-fnbar" });
+		const paint = (): void => {
+			bar.empty();
+			for (const sk of SKILLS) {
+				const on = this.plugin.settings.currentSkillId === sk.id;
+				const b = bar.createEl("button", { cls: `dsv-fn${on ? " is-on" : ""}`, text: `${sk.icon} ${sk.name}` });
+				b.setAttribute("title", sk.desc);
+				b.style.setProperty("--fn", sk.color);
+				b.addEventListener("click", () => {
+					this.plugin.settings.currentSkillId = sk.id;
+					void this.plugin.saveSettings();
+					paint();
+				});
+			}
+		};
+		paint();
+	}
+
+	/** 上传一个文本类文件（md / txt / csv / json），内容随这一句一起发出去 */
+	private async attachFile(input: HTMLInputElement): Promise<void> {
+		const file = input.files?.[0];
+		input.value = "";
+		if (!file) return;
+		if (file.size > 2 * 1024 * 1024) {
+			new Notice(isEn() ? "File is larger than 2 MB." : "文件超过 2 MB，先截一段再上传。");
+			return;
+		}
+		try {
+			const text = await file.text();
+			this.fileCtx = { name: file.name, text: text.slice(0, 60000) };
+			this.renderFileChip();
+		} catch {
+			new Notice(isEn() ? "Could not read that file." : "读不了这个文件。");
+		}
+	}
+
+	private renderFileChip(): void {
+		if (!this.shotsEl) return;
+		if (!this.fileChipEl) {
+			this.fileChipEl = this.shotsEl.createDiv({ cls: "dsv-filechip" });
+		}
+		this.fileChipEl.empty();
+		if (!this.fileCtx) return;
+		this.fileChipEl.createSpan({ text: `📄 ${this.fileCtx.name}` });
+		const x = this.fileChipEl.createEl("button", { cls: "dsv-filechip-x", text: "×" });
+		x.addEventListener("click", () => {
+			this.fileCtx = null;
+			this.fileChipEl?.empty();
+		});
+	}
+
 	/** 拍照 / 相册：手机直接调系统相机，桌面上是选文件 */
 	private buildShots(parent: HTMLElement): void {
 		const wrap = parent.createDiv({ cls: "dsv-shots" });
@@ -171,7 +239,16 @@ export class AgentModal extends Modal {
 		setIcon(gal, "image");
 		gal.createSpan({ cls: "dsv-shot-label", text: s("amGallery") });
 		gal.addEventListener("click", () => void this.addImage(false));
-		this.shotBtns = [cam, gal];
+		const fileBtn = bar.createEl("button", { cls: "dsv-shot-btn" });
+		setIcon(fileBtn, "paperclip");
+		fileBtn.createSpan({ cls: "dsv-shot-label", text: isEn() ? "File" : "文件" });
+		const fileInput = bar.createEl("input", { type: "file" });
+		fileInput.addClass("dsv-file-input");
+		fileInput.accept = ".md,.markdown,.txt,.csv,.json";
+		fileBtn.addEventListener("click", () => fileInput.click());
+		fileInput.addEventListener("change", () => void this.attachFile(fileInput));
+
+		this.shotBtns = [cam, gal, fileBtn];
 
 		this.shotsEl = wrap.createDiv({ cls: "dsv-shot-list" });
 		this.shotsEl.addClass("is-empty");
@@ -316,8 +393,11 @@ export class AgentModal extends Modal {
 
 	private setBusy(busy: boolean, label?: string): void {
 		this.busy = busy;
-		this.runBtn.disabled = busy;
-		this.runBtn.setText(busy ? s("amRunning") : label ?? (this.state ? s("amSend") : s("amRun")));
+		// 跑的时候按钮变成「暂停」：随时能按，按了就等这一轮跑完停下，状态全留着
+		this.runBtn.disabled = false;
+		this.runBtn.setText(busy ? (this.paused ? "正在暂停…" : "暂停") : label ?? (this.state ? s("amSend") : s("amRun")));
+		this.runBtn.toggleClass("is-pause", busy);
+		if (busy) this.paused = false;
 		for (const btn of this.shotBtns) btn.disabled = busy;
 		this.modalEl.toggleClass("is-busy", busy);
 	}
@@ -421,10 +501,25 @@ export class AgentModal extends Modal {
 	}
 
 	private async run(): Promise<void> {
-		if (this.busy) return;
+		if (this.busy) {
+			// 正在跑的时候用户又说了话：排进队列，这一轮结束自动发出去，不打断当前步骤
+			const queued = this.inputEl.value.trim();
+			if (queued) {
+				this.queue.push(queued);
+				this.inputEl.value = "";
+				this.autoGrow();
+				new Notice(`已排队（${this.queue.length} 条），这轮跑完就接着发`);
+			}
+			return;
+		}
 		const typed = this.inputEl.value.trim();
 		// 只拍了图、没说要求：给它一个稳妥的默认动作
-		const instruction = typed || (this.images.length ? s("amPhotoOnly") : "");
+		const filePart = this.fileCtx
+			? `【附件：${this.fileCtx.name}】\n${this.fileCtx.text}`
+			: "";
+		const instruction = [typed || (this.images.length ? s("amPhotoOnly") : ""), filePart]
+			.filter((x) => !!x)
+			.join("\n\n");
 		if (!instruction) {
 			new Notice(s("amEmpty"));
 			this.inputEl.focus();
@@ -445,6 +540,14 @@ export class AgentModal extends Modal {
 			const images = this.images.map((img) => img.dataUrl);
 			const shots = this.images.map((img) => img.savedPath).filter((p): p is string => !!p);
 			const onStep = (step: AgentStep): void => this.addStep(step);
+			const hooks = {
+				shouldStop: () => this.paused,
+				onCheckpoint: (next: AgentState) => {
+					this.state = next;
+					this.plugin.agentSession = next;
+					void this.plugin.persistSession(next);
+				},
+			};
 			// 当前功能（学 / 文 / 帐）合成的提示词块：基座 + 用户的补充
 			const skill = getSkill(this.plugin.settings.currentSkillId);
 			const skillBlock = buildSkillPrompt(skill, this.plugin.settings.skillMine?.[skill.id]);
@@ -456,6 +559,7 @@ export class AgentModal extends Modal {
 						note,
 						onStep,
 						skillBlock,
+						...hooks,
 				  })
 				: await runAgent(this.app, this.plugin.settings, this.ctx, instruction, {
 						images,
@@ -463,6 +567,7 @@ export class AgentModal extends Modal {
 						pending: this.pending,
 						onStep,
 						skillBlock,
+						...hooks,
 				  });
 
 			// 图已经发出去了，清掉缩略图，免得下一句又带同一张
@@ -473,6 +578,16 @@ export class AgentModal extends Modal {
 			this.showError(errorMessage(err));
 		} finally {
 			this.setBusy(false);
+			if (this.paused) {
+				this.paused = false;
+				new Notice("已暂停，接着说的话会从断点往下跑…");
+			}
+			const next = this.queue.shift();
+			if (next) {
+				this.inputEl.value = next;
+				this.autoGrow();
+				void this.run();
+			}
 		}
 		this.syncHead();
 	}
@@ -521,6 +636,16 @@ export class AgentModal extends Modal {
 			this.showError(errorMessage(err));
 		} finally {
 			this.setBusy(false);
+			if (this.paused) {
+				this.paused = false;
+				new Notice("已暂停，接着说的话会从断点往下跑…");
+			}
+			const next = this.queue.shift();
+			if (next) {
+				this.inputEl.value = next;
+				this.autoGrow();
+				void this.run();
+			}
 		}
 		this.syncHead();
 	}

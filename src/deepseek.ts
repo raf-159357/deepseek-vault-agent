@@ -229,22 +229,38 @@ export async function postJson(
 		throw new ApiError(s("errNoKey"));
 	}
 
-	let res;
-	try {
-		res = await requestUrl({
-			url: joinUrl(settings.baseUrl, path),
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${settings.apiKey.trim()}`,
-			},
-			body: JSON.stringify(body),
-			throw: false,
-		});
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : String(err);
-		throw new ApiError(F.netFail(msg));
+	// 手机上切来切去，网络抖一下就整段白跑太亏。重试两次，退避 0.8s / 2s。
+	const RETRY_DELAYS = [800, 2000];
+	let res: Awaited<ReturnType<typeof requestUrl>> | null = null;
+	let lastErr = "";
+	for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+		try {
+			res = await requestUrl({
+				url: joinUrl(settings.baseUrl, path),
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${settings.apiKey.trim()}`,
+				},
+				body: JSON.stringify(body),
+				throw: false,
+			});
+		} catch (err) {
+			lastErr = err instanceof Error ? err.message : String(err);
+			if (attempt < RETRY_DELAYS.length) {
+				await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+				continue;
+			}
+			throw new ApiError(F.netFail(lastErr));
+		}
+		// 5xx 和 429 值得重试；4xx 是请求本身的问题，重试也没用
+		if ((res.status >= 500 || res.status === 429) && attempt < RETRY_DELAYS.length) {
+			await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+			continue;
+		}
+		break;
 	}
+	if (!res) throw new ApiError(F.netFail(lastErr || "no response"));
 
 	if (res.status >= 400) throw mapHttpError(res.status, res.text ?? "");
 

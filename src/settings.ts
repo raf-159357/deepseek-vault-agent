@@ -25,6 +25,10 @@ export interface DeepSeekVoiceSettings {
 	webSearchEnabled: boolean;
 	searchCount: number;
 	agentMaxSteps: number;
+	/** 单次运行的时间上限（分钟）。0 = 不限，靠用户随时暂停 */
+	agentTimeLimitMin: number;
+	/** 回到前台时，如果上次任务还没跑完，自动接着跑 */
+	autoResume: boolean;
 	agentContextChars: number;
 	/** 默认关：允许 AI 把笔记移入回收站 */
 	allowDelete: boolean;
@@ -71,7 +75,9 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	asrEnabled: true,
 	webSearchEnabled: true,
 	searchCount: 8,
-	agentMaxSteps: 8,
+	agentMaxSteps: 0,
+	agentTimeLimitMin: 0,
+	autoResume: true,
 	agentContextChars: 20000,
 	allowDelete: false,
 	uiLang: "auto",
@@ -93,6 +99,8 @@ export function normalizeSettings(data: Partial<DeepSeekVoiceSettings>): DeepSee
 	merged.cropShot = data.cropShot !== false;
 	merged.shotToNote = data.shotToNote !== false;
 	// 0.8 新增：老数据没有技能字段，给一个默认技能
+	merged.agentTimeLimitMin = typeof data.agentTimeLimitMin === "number" ? data.agentTimeLimitMin : 0;
+	merged.autoResume = data.autoResume !== false;
 	merged.currentSkillId = typeof data.currentSkillId === "string" ? data.currentSkillId : "journal";
 	merged.skillMine = data.skillMine && typeof data.skillMine === "object" ? data.skillMine : {};
 	return merged;

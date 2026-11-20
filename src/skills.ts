@@ -5,7 +5,7 @@ import type { VoiceMode } from "./types";
  * 这里只放基座与默认值，用户的补充存在 settings.skillMine 里，按 skill.id 取。
  */
 
-export type SkillId = "study" | "paper" | "journal";
+export type SkillId = "study" | "paper" | "journal" | "free";
 
 /** 用户能喂给技能的东西：不一定是照片 */
 export type SkillInput = "photo" | "file" | "link" | "doi" | "text";
@@ -161,7 +161,36 @@ const JOURNAL: Skill = {
 	defaults: { extraPrompt: "", toggles: { calories: false } },
 };
 
-export const SKILLS: Skill[] = [STUDY, PAPER, JOURNAL];
+
+/* ——————————————————————————— 自由（其他） ——————————————————————————— */
+
+const FREE: Skill = {
+	id: "free",
+	name: "其他",
+	icon: "随",
+	color: "#6f6a62",
+	desc: "你说了算，它自己定结构",
+	inputs: ["photo", "file", "link", "text"],
+	builtin: {
+		fragment: [
+			"用户没有指定产出形态。先判断他到底要什么：一份笔记、一次整理、一张清单，还是只要一个答案。",
+			"按最合适的结构写，但必须做到三点：",
+			"1. 先给结论，再给依据；结论不超过三行。",
+			"2. 结构跟着内容走，不要硬套学习笔记或文献综述的模板。",
+			"3. 不确定的地方单独标出来，不要编。",
+			"如果用户的意图本身不清楚，先按最可能的一种做出来，并在开头用一句话说明你按什么理解做的。",
+		].join("\n"),
+		outline: [],
+		graph: false,
+		questions: false,
+		tools: ["search_notes", "read_note", "read_url", "web_search", "list_folder", "write_note"],
+		defaultMode: "create-note",
+		folder: "",
+	},
+	defaults: { extraPrompt: "", toggles: {} },
+};
+
+export const SKILLS: Skill[] = [STUDY, PAPER, JOURNAL, FREE];
 
 export function getSkill(id: string | undefined): Skill {
 	return SKILLS.find((s) => s.id === id) ?? JOURNAL;
