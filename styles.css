@@ -687,8 +687,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
+	background: #fff;
+	color: #4D6BFE;
 	box-shadow:
 		0 1px 2px rgba(0, 0, 0, 0.18),
 		0 6px 18px rgba(0, 0, 0, 0.22);
@@ -706,6 +706,7 @@
 }
 
 .dsv-fab svg {
+	display: block;
 	width: 23px;
 	height: 23px;
 }
