@@ -1112,3 +1112,80 @@
 	40% { transform: translateY(-10px) scale(1.06, 0.94); }
 	100% { transform: translateY(0) scale(1); }
 }
+
+/* 「我的补充」编辑页 */
+.dsv-skilledit h3 {
+	margin: 0 0 6px;
+}
+
+.dsv-skilledit-tip {
+	margin: 0 0 14px;
+	color: var(--text-muted);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.dsv-skilledit-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.dsv-skilledit-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.dsv-skilledit-label {
+	font-size: 14px;
+}
+
+.dsv-skilledit-desc {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.dsv-skilledit-area {
+	width: 100%;
+	min-height: 120px;
+	margin-top: 8px;
+	resize: vertical;
+}
+
+.dsv-skilledit-count {
+	text-align: right;
+	font-size: 11px;
+	color: var(--text-faint);
+	margin-top: 4px;
+}
+
+.dsv-skilledit-bar {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+/* 功能条：右对齐 + 齿轮 */
+.dsv-fnbar {
+	justify-content: flex-end;
+}
+
+.dsv-fn-edit {
+	border: 1px dashed var(--background-modifier-border);
+	background: transparent;
+	color: var(--text-muted);
+	border-radius: 999px;
+	padding: 4px 9px;
+	cursor: pointer;
+	line-height: 1.1;
+}
+
+.dsv-fn-edit:hover {
+	color: var(--text-normal);
+	border-color: var(--text-muted);
+}

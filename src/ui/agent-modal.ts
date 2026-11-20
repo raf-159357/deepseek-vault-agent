@@ -3,6 +3,7 @@ import type DeepSeekVoicePlugin from "../main";
 import { ApiError, supportsVision, transcribe } from "../deepseek";
 import { commitAgent, continueAgent, followUpAgent, runAgent } from "../agent";
 import { buildSkillPrompt, getSkill, SKILLS } from "../skills";
+import { SkillMineModal } from "./skill-editor";
 import { describeOp } from "../vault-tools";
 import { WavRecorder } from "../audio";
 import { cropImage, pickImage } from "../image";
@@ -189,6 +190,11 @@ export class AgentModal extends Modal {
 					paint();
 				});
 			}
+			const edit = bar.createEl("button", { cls: "dsv-fn-edit", text: "✎" });
+			edit.setAttribute("title", isEn() ? "Edit my additions" : "编辑「我的补充」");
+			edit.addEventListener("click", () => {
+				new SkillMineModal(this.plugin, this.plugin.settings.currentSkillId, () => paint()).open();
+			});
 		};
 		paint();
 	}
