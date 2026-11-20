@@ -2,7 +2,7 @@
 
 **Say one sentence — it searches the web, reads the links, and writes the note.** A **mobile-first** AI agent for Obsidian on **iPhone and Android**, running on your own DeepSeek API key. It does run on desktop as well, but phones are what it was built for — that is the case it solves: no laptop at hand.
 
-[中文说明](README.zh-CN.md) · [Report an issue](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
+[中文说明](README.zh-CN.md) · [Third-party notices](THIRD-PARTY-NOTICES.md) · [Report an issue](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
 
 > **Arrived here through an AI agent?** The facts an agent needs — requirements, install steps, cost model, limits, contact — are collected in [`llms.txt`](llms.txt). Short version: free plugin, own API key, no server, runs on iPhone. Questions: **renafu159357@163.com** or WeChat (QR near the end).
 

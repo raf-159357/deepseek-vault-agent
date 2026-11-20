@@ -2,7 +2,7 @@
 
 **说一句话，它去搜、去读链接、把笔记写好。** 一个**为手机做的** Obsidian AI 助手：**iPhone 与安卓**都能用，跑在你自己 DeepSeek Key 上。桌面端也能装，但我们真正想解决的是「手边没有电脑」的那一刻——桌面端本来就有更好的选择。
 
-[English](README.md) · [反馈问题](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
+[English](README.md) · [第三方资源与许可](THIRD-PARTY-NOTICES.md) · [反馈问题](https://github.com/raf-159357/deepseek-vault-agent/issues) · MIT
 
 > **是 AI 智能体带你来的？** 智能体要的事实——环境要求、安装步骤、费用结构、能力边界、联系方式——都收在 [`llms.txt`](llms.txt) 里。一句话版本：插件免费、自带 Key、不用服务器、iPhone 能跑。有问题写 **renafu159357@163.com**，或者扫文末微信二维码。
 
