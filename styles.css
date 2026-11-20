@@ -687,7 +687,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: #fff;
+	background: transparent;
 	color: #4D6BFE;
 	box-shadow:
 		0 1px 2px rgba(0, 0, 0, 0.18),
@@ -1043,8 +1043,8 @@
 
 .dsv-fab-art {
 	display: block;
-	width: 44px;
-	height: 44px;
+	width: 48px;
+	height: 48px;
 	border-radius: 50%;
 	overflow: hidden;
 	transform-origin: 50% 90%;
