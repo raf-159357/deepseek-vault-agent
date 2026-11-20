@@ -1,6 +1,6 @@
 {
 	"name": "deepseek-vault-agent",
-	"version": "0.9.2",
+	"version": "0.9.3",
 	"description": "Obsidian plugin: voice-first note editing with DeepSeek",
 	"main": "main.js",
 	"private": true,
