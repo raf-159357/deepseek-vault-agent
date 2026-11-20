@@ -96,9 +96,13 @@ export class AgentModal extends Modal {
 		});
 		this.badgeEl = head.createDiv({ cls: "dsv-badge" });
 
-		this.buildFnBar(contentEl);
+		// 左内容 + 右功能栏：功能竖着排在右边，不压输入区
+		const body = contentEl.createDiv({ cls: "dsv-body" });
+		const main = body.createDiv({ cls: "dsv-main" });
+		const rail = body.createDiv({ cls: "dsv-rail" });
+		this.buildFnRail(rail);
 
-		const chips = contentEl.createDiv({ cls: "dsv-chips" });
+		const chips = main.createDiv({ cls: "dsv-chips" });
 		for (const text of s("amSamples").split("\n")) {
 			const chip = chips.createEl("button", { cls: "dsv-chip", text });
 			chip.addEventListener("click", () => {
@@ -108,10 +112,10 @@ export class AgentModal extends Modal {
 			});
 		}
 
-		this.buildShots(contentEl);
+		this.buildShots(main);
 
 		if (this.plugin.settings.asrEnabled) {
-			const rec = contentEl.createDiv({ cls: "dsv-rec" });
+			const rec = main.createDiv({ cls: "dsv-rec" });
 			this.recBtn = rec.createEl("button", { cls: "dsv-recbtn", text: s("vmStart") });
 			this.recBtn.addEventListener("click", () => void this.toggleRecord());
 			this.recHint = rec.createDiv({ cls: "dsv-rechint" });
@@ -122,7 +126,7 @@ export class AgentModal extends Modal {
 			);
 		}
 
-		this.inputEl = contentEl.createEl("textarea", { cls: "dsv-input" });
+		this.inputEl = main.createEl("textarea", { cls: "dsv-input" });
 		this.inputEl.rows = 4;
 		this.inputEl.placeholder = s("amPlaceholder");
 		this.inputEl.value = this.presetText;
@@ -134,9 +138,9 @@ export class AgentModal extends Modal {
 			}
 		});
 
-		this.stepsHead = contentEl.createDiv({ cls: "dsv-steps-head" });
-		this.stepsEl = contentEl.createDiv({ cls: "dsv-steps" });
-		this.resultEl = contentEl.createDiv({ cls: "dsv-result" });
+		this.stepsHead = main.createDiv({ cls: "dsv-steps-head" });
+		this.stepsEl = main.createDiv({ cls: "dsv-steps" });
+		this.resultEl = main.createDiv({ cls: "dsv-result" });
 
 		const footer = contentEl.createDiv({ cls: "dsv-footer" });
 		const closeBtn = footer.createEl("button", { cls: "dsv-btn-quiet", text: s("amClose") });
@@ -174,15 +178,17 @@ export class AgentModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	/** 功能条：学 / 文 / 帐 / 其他，点一下即时切换，不用进设置 */
-	private buildFnBar(parent: HTMLElement): void {
-		const bar = parent.createDiv({ cls: "dsv-fnbar" });
+	/** 右侧功能栏：竖排；选中的展开成「学 学习拆解」，其余只留单字省宽度 */
+	private buildFnRail(rail: HTMLElement): void {
 		const paint = (): void => {
-			bar.empty();
+			rail.empty();
 			for (const sk of SKILLS) {
 				const on = this.plugin.settings.currentSkillId === sk.id;
-				const b = bar.createEl("button", { cls: `dsv-fn${on ? " is-on" : ""}`, text: `${sk.icon} ${sk.name}` });
-				b.setAttribute("title", sk.desc);
+				const b = rail.createEl("button", {
+					cls: `dsv-fn${on ? " is-on" : ""}`,
+					text: on ? `${sk.icon} ${sk.name}` : sk.icon,
+				});
+				b.setAttribute("title", `${sk.name} · ${sk.desc}`);
 				b.style.setProperty("--fn", sk.color);
 				b.addEventListener("click", () => {
 					this.plugin.settings.currentSkillId = sk.id;
@@ -190,7 +196,7 @@ export class AgentModal extends Modal {
 					paint();
 				});
 			}
-			const edit = bar.createEl("button", { cls: "dsv-fn-edit", text: "✎" });
+			const edit = rail.createEl("button", { cls: "dsv-fn-edit", text: "✎" });
 			edit.setAttribute("title", isEn() ? "Edit my additions" : "编辑「我的补充」");
 			edit.addEventListener("click", () => {
 				new SkillMineModal(this.plugin, this.plugin.settings.currentSkillId, () => paint()).open();

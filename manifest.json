@@ -1,7 +1,7 @@
 {
 	"id": "deepseek-vault-agent",
 	"name": "DeepSeek Vault Agent",
-	"version": "0.9.4",
+	"version": "0.9.5",
 	"minAppVersion": "1.7.2",
 	"description": "Mobile-first (iPhone + Android) DeepSeek agent for Obsidian: speak or type, it searches, reads links, and writes notes. Bring your own key. Desktop works too.",
 	"author": "raf-159357",
