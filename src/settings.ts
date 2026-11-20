@@ -35,6 +35,8 @@ export interface DeepSeekVoiceSettings {
 	/** —— 0.4：界面语言与手机悬浮按钮 —— */
 	uiLang: "auto" | "zh" | "en";
 	floatingButton: boolean;
+	/** 让图标自己走动：每隔几秒挪一小段，像个小宠物 */
+	fabWander: boolean;
 	fabRight: number;
 	fabBottom: number;
 	/** —— 0.6：累计用量，用来观察缓存命中率 —— */
@@ -82,6 +84,7 @@ export const DEFAULT_SETTINGS: DeepSeekVoiceSettings = {
 	allowDelete: false,
 	uiLang: "auto",
 	floatingButton: true,
+	fabWander: true,
 	fabRight: 16,
 	fabBottom: 96,
 	cacheStats: { ...EMPTY_STATS },
@@ -101,6 +104,7 @@ export function normalizeSettings(data: Partial<DeepSeekVoiceSettings>): DeepSee
 	// 0.8 新增：老数据没有技能字段，给一个默认技能
 	merged.agentTimeLimitMin = typeof data.agentTimeLimitMin === "number" ? data.agentTimeLimitMin : 0;
 	merged.autoResume = data.autoResume !== false;
+	merged.fabWander = data.fabWander !== false;
 	merged.currentSkillId = typeof data.currentSkillId === "string" ? data.currentSkillId : "journal";
 	merged.skillMine = data.skillMine && typeof data.skillMine === "object" ? data.skillMine : {};
 	return merged;
